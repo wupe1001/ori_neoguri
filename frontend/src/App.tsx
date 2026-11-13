@@ -1,5 +1,4 @@
 import { BrowserRouter, Route, Routes } from 'react-router'
-import './App.css'
 
 import StudentLayout from './layouts/StudentLayout'
 import TeacherLayout from './layouts/TeacherLayout'
