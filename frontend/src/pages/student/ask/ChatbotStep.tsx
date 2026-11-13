@@ -7,7 +7,8 @@ type Props = {
   question: string
   reply: ChatbotReply
   onResolved: () => void
-  onAskTeacher: () => void
+  // 없으면 [선생님께 넘기기]를 숨긴다 (실제 백엔드는 공지로 답한 뒤 넘기는 기능이 없다)
+  onAskTeacher?: () => void
 }
 
 export default function ChatbotStep({ question, reply, onResolved, onAskTeacher }: Props) {
@@ -37,9 +38,15 @@ export default function ChatbotStep({ question, reply, onResolved, onAskTeacher 
             해결됐어요
           </Button>
         )}
-        <Button variant={reply.answer ? 'secondary' : 'primary'} fullWidth onClick={onAskTeacher}>
-          선생님께 넘기기
-        </Button>
+        {onAskTeacher ? (
+          <Button variant={reply.answer ? 'secondary' : 'primary'} fullWidth onClick={onAskTeacher}>
+            선생님께 넘기기
+          </Button>
+        ) : (
+          <p className="text-center text-caption text-muted">
+            답이 부족하면 더 구체적으로 다시 질문해 주세요. 공지에 없는 내용은 선생님께 전달돼요.
+          </p>
+        )}
       </div>
     </div>
   )

@@ -10,7 +10,8 @@ type Props = {
   authorLabel: string
   sending: boolean
   onSend: (finalText: string) => void
-  onBack: () => void
+  // 없으면 [빈칸 다시 채우기]를 숨긴다
+  onBack?: () => void
 }
 
 // "이렇게 보낼까요?" → 이대로 보내기 / 직접 고치기
@@ -53,9 +54,11 @@ export default function ConfirmStep({ rewrittenText, isAnonymous, authorLabel, s
             <Button variant="secondary" fullWidth onClick={() => setEditing(true)}>
               직접 고치기
             </Button>
-            <Button variant="ghost" fullWidth onClick={onBack}>
-              빈칸 다시 채우기
-            </Button>
+            {onBack && (
+              <Button variant="ghost" fullWidth onClick={onBack}>
+                빈칸 다시 채우기
+              </Button>
+            )}
           </>
         )}
       </div>

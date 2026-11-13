@@ -6,23 +6,16 @@ import { TextArea } from '../../../components/TextField'
 type Props = {
   text: string
   onTextChange: (text: string) => void
-  isAnonymous: boolean
-  onAnonymousChange: (value: boolean) => void
+  // 익명 체크박스 (백엔드가 익명을 지원하지 않으면 넘기지 않는다)
+  anonymous?: { value: boolean; onChange: (value: boolean) => void }
   // 욕설·비방으로 걸렸을 때 이유
   blockedReason: string | null
-  onAskChatbot: () => void
+  // 있으면 [챗봇에게] [선생님께] 두 버튼, 없으면 [질문 보내기] 하나 (AI가 공지로 답할지 판단)
+  onAskChatbot?: () => void
   onAskTeacher: () => void
 }
 
-export default function WriteStep({
-  text,
-  onTextChange,
-  isAnonymous,
-  onAnonymousChange,
-  blockedReason,
-  onAskChatbot,
-  onAskTeacher,
-}: Props) {
+export default function WriteStep({ text, onTextChange, anonymous, blockedReason, onAskChatbot, onAskTeacher }: Props) {
   const canSubmit = text.trim().length > 0
 
   return (
@@ -38,11 +31,13 @@ export default function WriteStep({
         maxLength={500}
       />
 
-      <Checkbox
-        label="익명 (학년·반만 보임)"
-        checked={isAnonymous}
-        onChange={(e) => onAnonymousChange(e.target.checked)}
-      />
+      {anonymous && (
+        <Checkbox
+          label="익명 (학년·반만 보임)"
+          checked={anonymous.value}
+          onChange={(e) => anonymous.onChange(e.target.checked)}
+        />
+      )}
 
       {blockedReason && (
         <Card className="border-danger bg-danger-soft">
@@ -51,17 +46,28 @@ export default function WriteStep({
         </Card>
       )}
 
-      <div className="flex flex-col gap-2">
-        <Button variant="secondary" fullWidth disabled={!canSubmit} onClick={onAskChatbot}>
-          챗봇에게 질문하기
-        </Button>
-        <Button fullWidth disabled={!canSubmit} onClick={onAskTeacher}>
-          선생님께 질문하기
-        </Button>
-        <p className="text-center text-caption text-muted">
-          챗봇은 공지와 선생님이 승인한 답에서 찾아 바로 알려줘요
-        </p>
-      </div>
+      {onAskChatbot ? (
+        <div className="flex flex-col gap-2">
+          <Button variant="secondary" fullWidth disabled={!canSubmit} onClick={onAskChatbot}>
+            챗봇에게 질문하기
+          </Button>
+          <Button fullWidth disabled={!canSubmit} onClick={onAskTeacher}>
+            선생님께 질문하기
+          </Button>
+          <p className="text-center text-caption text-muted">
+            챗봇은 공지와 선생님이 승인한 답에서 찾아 바로 알려줘요
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <Button fullWidth disabled={!canSubmit} onClick={onAskTeacher}>
+            질문 보내기
+          </Button>
+          <p className="text-center text-caption text-muted">
+            AI가 공지에서 답을 먼저 찾고, 없으면 담당 선생님께 전해 줘요
+          </p>
+        </div>
+      )}
     </div>
   )
 }
