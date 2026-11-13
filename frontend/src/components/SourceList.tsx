@@ -1,4 +1,4 @@
-import type { Source } from '../../../types/question'
+import type { Source } from '../types/question'
 
 const typeLabel: Record<Source['type'], string> = {
   notice: '공지',

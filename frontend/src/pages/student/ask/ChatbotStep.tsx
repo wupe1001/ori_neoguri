@@ -1,7 +1,7 @@
 import Button from '../../../components/Button'
 import Card from '../../../components/Card'
 import type { ChatbotReply } from '../../../types/question'
-import SourceList from './SourceList'
+import SourceList from '../../../components/SourceList'
 
 type Props = {
   question: string

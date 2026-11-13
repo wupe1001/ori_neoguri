@@ -6,7 +6,7 @@ import type {
   ScreenResult,
   Source,
 } from '../types/question'
-import type { Student } from '../types/user'
+import type { Department, Student } from '../types/user'
 import { delay, readDb } from './mock/db'
 
 // AI가 하는 일들의 목업. 실제로는 백엔드가 AI를 호출한 결과를 돌려준다.
@@ -88,12 +88,21 @@ export async function askChatbot(text: string): Promise<ChatbotReply> {
 
 // TODO(백엔드): GET /api/questions/:id/draft
 
-// 교사용 AI 답 초안
+// 교사용 AI 답 초안. 근거가 없으면 text가 빈 문자열 (교사가 직접 작성)
 export async function getAnswerDraft(questionText: string): Promise<AnswerDraft> {
   await delay(800)
   const sources = findSources(questionText)
-  if (sources.length === 0) {
-    return { text: '관련 공지나 승인된 답을 찾지 못했어요. 직접 답을 작성해 주세요.', sources: [] }
-  }
+  if (sources.length === 0) return { text: '', sources: [] }
   return { text: `안녕하세요. ${sources[0].excerpt} 더 궁금한 점이 있으면 다시 질문해 주세요.`, sources }
+}
+
+// TODO(백엔드): GET /api/questions/:id/recommend-department
+
+// 내 담당이 아닐 때 넘길 부서 추천
+export async function recommendDepartment(text: string): Promise<{ department: Department; reason: string }> {
+  await delay(300)
+  if (/체험학습|출결|결석|시험|성적|수강/.test(text)) return { department: '교무부', reason: '학사·출결 관련 질문이에요' }
+  if (/급식|교복|분실|납부|비용|돈/.test(text)) return { department: '행정실', reason: '비용·시설 관련 질문이에요' }
+  if (/고민|걱정|친구|힘들/.test(text)) return { department: '상담실', reason: '고민 상담이 필요해 보여요' }
+  return { department: '학생부', reason: '학교생활·규정 관련 질문이에요' }
 }
