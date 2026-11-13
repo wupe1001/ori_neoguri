@@ -89,21 +89,23 @@ export default function TeacherHomePage() {
         </Card>
       </Link>
 
-      {/* AI 오늘 공지 초안 */}
-      <section className="flex flex-col gap-2">
-        <h2 className="font-semibold">오늘 보낼 공지 초안</h2>
-        <Card className="border-primary-200 bg-primary-50">
-          <p className="text-caption font-semibold text-primary-700">AI 초안</p>
-          <p className="mt-1 font-semibold">{data.noticeDraft.title}</p>
-          <p className="mt-1 line-clamp-3 text-caption text-ink">{data.noticeDraft.body}</p>
-          <p className="mt-2 text-caption text-muted">근거: {data.noticeDraft.basis}</p>
-          <Link to={ROUTES.TEACHER.NOTICES} className="mt-3 block">
-            <Button size="sm" variant="secondary">
-              검토하고 보내기
-            </Button>
-          </Link>
-        </Card>
-      </section>
+      {/* AI 오늘 공지 초안 (실제 백엔드는 아직 없어서 숨긴다) */}
+      {data.noticeDraft && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-semibold">오늘 보낼 공지 초안</h2>
+          <Card className="border-primary-200 bg-primary-50">
+            <p className="text-caption font-semibold text-primary-700">AI 초안</p>
+            <p className="mt-1 font-semibold">{data.noticeDraft.title}</p>
+            <p className="mt-1 line-clamp-3 text-caption text-ink">{data.noticeDraft.body}</p>
+            <p className="mt-2 text-caption text-muted">근거: {data.noticeDraft.basis}</p>
+            <Link to={ROUTES.TEACHER.NOTICES} className="mt-3 block">
+              <Button size="sm" variant="secondary">
+                검토하고 보내기
+              </Button>
+            </Link>
+          </Card>
+        </section>
+      )}
 
       {/* 많이 나온 질문 TOP 3 */}
       <section className="flex flex-col gap-2">

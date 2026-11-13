@@ -9,7 +9,7 @@ import { get, post } from './client'
 
 const getDetail = (id: string) => get<StudentQuestionDetail>(`/api/questions/${id}`)
 
-// 공지 출처는 모양을 아직 확인하지 못해서, 흔한 필드 이름을 차례로 찾아본다
+// 근거 공지 → 출처 목록. 백엔드는 { id, title }만 준다 (내용이 오면 함께 쓴다)
 export function toSources(raw: unknown[]): Source[] {
   return raw.map((item) => {
     const s = (item ?? {}) as Record<string, unknown>
@@ -48,7 +48,8 @@ async function toResult(res: PipelineResponse): Promise<AskResult> {
       }
     }
     case 'NOTICE_ANSWERED': {
-      const { answer } = await getDetail(questionId)
+      // 응답에 답이 바로 오지만, 없으면 상세에서 가져온다
+      const answer = res.answer ?? (await getDetail(questionId)).answer
       return {
         kind: 'notice_answered',
         questionId,

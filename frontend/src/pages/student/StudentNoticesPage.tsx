@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { getApprovedAnswers, getNoticesFor } from '../../api/notices'
+import { getApprovedAnswers, getNoticesFor, HAS_FAQ } from '../../api/notices'
 import { subscribeQuestions } from '../../api/questions'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
@@ -48,26 +48,29 @@ export default function StudentNoticesPage() {
     <div className="flex flex-col gap-4">
       <h1>공지</h1>
 
-      <div className="grid grid-cols-2 rounded-full bg-page p-1 text-caption font-semibold">
-        {(
-          [
-            ['notices', '받은 공지'],
-            ['faq', '자주 묻는 질문'],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setTab(value)}
-            className={cn(
-              'rounded-full py-2 transition-colors',
-              tab === value ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted',
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* 자주 묻는 질문은 실제 백엔드에 아직 없어서 목업에서만 보여준다 */}
+      {HAS_FAQ && (
+        <div className="grid grid-cols-2 rounded-full bg-page p-1 text-caption font-semibold">
+          {(
+            [
+              ['notices', '받은 공지'],
+              ['faq', '자주 묻는 질문'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTab(value)}
+              className={cn(
+                'rounded-full py-2 transition-colors',
+                tab === value ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {tab === 'notices' ? (
         notices.length === 0 ? (

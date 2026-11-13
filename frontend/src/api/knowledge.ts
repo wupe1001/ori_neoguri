@@ -1,6 +1,8 @@
 import type { Material, Notice, Question } from '../types/question'
 import type { Teacher } from '../types/user'
+import { USE_MOCK } from './client'
 import { delay, newId, readDb, writeDb } from './mock/db'
+import { getAllNotices } from './notices'
 
 // 답 근거 저장소: 보낸 공지 + 승인된 답 + 수업 자료. 챗봇과 AI 답 초안은 여기서 근거를 찾는다.
 
@@ -17,7 +19,11 @@ export type Knowledge = {
 
 // TODO(백엔드): GET /api/knowledge
 
+// 실제 백엔드에는 보낸 공지만 있다 (승인된 답 모아보기·수업 자료는 아직 없음)
+export const HAS_FULL_KNOWLEDGE = USE_MOCK
+
 export async function getKnowledge(): Promise<Knowledge> {
+  if (!USE_MOCK) return { notices: await getAllNotices(), answers: [], materials: [] }
   await delay()
   const db = readDb()
 

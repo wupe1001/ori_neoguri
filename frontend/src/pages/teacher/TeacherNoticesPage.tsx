@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getTodayNoticeDraft } from '../../api/ai'
-import { getAllNotices, getClasses, sendNotice } from '../../api/notices'
+import { CAN_TARGET_CLASSES, getAllNotices, getClasses, sendNotice } from '../../api/notices'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
 import Checkbox from '../../components/Checkbox'
@@ -25,15 +25,18 @@ export default function TeacherNoticesPage() {
   const [targets, setTargets] = useState<string[]>([])
   const [sending, setSending] = useState(false)
   const [justSent, setJustSent] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
 
   // AI 초안, 반 목록, 보낸 공지를 불러온다. 대상은 담임 반을 기본으로 고른다.
   useEffect(() => {
     let cancelled = false
     Promise.all([getTodayNoticeDraft(), getClasses(), getAllNotices()]).then(([draft, classList, notices]) => {
       if (cancelled) return
-      setBasis(draft.basis)
-      setTitle(draft.title)
-      setBody(draft.body)
+      if (draft) {
+        setBasis(draft.basis)
+        setTitle(draft.title)
+        setBody(draft.body)
+      }
       setClasses(classList)
       setTargets(teacher.homeroom ? [classKey(teacher.homeroom)] : [])
       setSent(notices)
@@ -43,13 +46,14 @@ export default function TeacherNoticesPage() {
     }
   }, [teacher])
 
-  if (!classes || !sent) return <Loading message="AI가 오늘 공지 초안을 쓰고 있어요…" />
+  if (!classes || !sent) return <Loading message="공지를 불러오고 있어요…" />
 
   const toggleTarget = (key: string) =>
     setTargets((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
 
   const handleSend = async () => {
     setSending(true)
+    setSendError(null)
     try {
       const target = classes.filter((c) => targets.includes(classKey(c)))
       const notice = await sendNotice(teacher, title.trim(), body.trim(), target)
@@ -58,12 +62,14 @@ export default function TeacherNoticesPage() {
       setTitle('')
       setBody('')
       setBasis('')
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : '공지를 보내지 못했어요. 다시 시도해 주세요.')
     } finally {
       setSending(false)
     }
   }
 
-  const canSend = title.trim() && body.trim() && targets.length > 0 && !sending
+  const canSend = title.trim() && body.trim() && (!CAN_TARGET_CLASSES || targets.length > 0) && !sending
 
   return (
     <div className="flex flex-col gap-5">
@@ -82,22 +88,27 @@ export default function TeacherNoticesPage() {
           <Input label="제목" value={title} onChange={(e) => setTitle(e.target.value)} />
           <TextArea label="내용" value={body} onChange={(e) => setBody(e.target.value)} rows={6} />
 
-          <div className="flex flex-col gap-2">
-            <p className="text-caption font-semibold text-ink">받는 반</p>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {classes.map((c) => (
-                <Checkbox
-                  key={classKey(c)}
-                  label={classLabel(c)}
-                  checked={targets.includes(classKey(c))}
-                  onChange={() => toggleTarget(classKey(c))}
-                />
-              ))}
+          {/* 실제 백엔드는 반 선택 없이 모든 학생에게 보낸다 */}
+          {CAN_TARGET_CLASSES && (
+            <div className="flex flex-col gap-2">
+              <p className="text-caption font-semibold text-ink">받는 반</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {classes.map((c) => (
+                  <Checkbox
+                    key={classKey(c)}
+                    label={classLabel(c)}
+                    checked={targets.includes(classKey(c))}
+                    onChange={() => toggleTarget(classKey(c))}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {sendError && <p className="text-caption text-danger">{sendError}</p>}
 
           <Button fullWidth disabled={!canSend} onClick={handleSend}>
-            {sending ? '보내는 중…' : `${targets.length}개 반에 보내기`}
+            {sending ? '보내는 중…' : CAN_TARGET_CLASSES ? `${targets.length}개 반에 보내기` : '모든 학생에게 보내기'}
           </Button>
         </div>
       </Card>
@@ -116,7 +127,8 @@ export default function TeacherNoticesPage() {
               </div>
               <p className="mt-1 line-clamp-2 text-caption text-ink">{n.body}</p>
               <p className="mt-2 text-caption text-muted">
-                {n.senderName ?? '선생님'} · {n.target.map(classLabel).join(', ')}
+                {n.senderName ?? '선생님'}
+                {n.target.length > 0 && ` · ${n.target.map(classLabel).join(', ')}`}
               </p>
             </Card>
           ))

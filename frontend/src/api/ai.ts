@@ -268,7 +268,9 @@ export async function getLessonDraft(cluster: QuestionCluster): Promise<string> 
 // TODO(백엔드): GET /api/notices/draft
 
 // 교사: 학사일정·가정통신문으로 만든 오늘의 공지 초안
-export async function getTodayNoticeDraft(): Promise<{ title: string; body: string; basis: string }> {
+// 실제 백엔드에는 공지 초안 API가 아직 없어서 null (빈 입력창으로 시작)
+export async function getTodayNoticeDraft(): Promise<{ title: string; body: string; basis: string } | null> {
+  if (!USE_MOCK) return null
   await delay(500)
   return {
     title: '기말고사 2주 전 안내',

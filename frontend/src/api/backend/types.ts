@@ -31,7 +31,11 @@ export type PipelineResponse = {
   routeType?: RouteType // ASSIGNED
   subject?: Subject | null // ASSIGNED (과목 배정)
   message?: string // ASSIGNED + HOMEROOM (위기 신호 안내 문구)
+  answer?: { content: string; sources: AnswerSource[] } // NOTICE_ANSWERED
 }
+
+// 공지로 답했을 때 근거 공지
+export type AnswerSource = { id: number; title: string }
 
 export type BackendDetails = {
   who: string
@@ -45,12 +49,12 @@ export type BackendDetails = {
 
 export type BackendAnswer = {
   id: number
-  authorType: string // 'TEACHER' (공지 답변은 확인 못 함)
+  authorType: string // 'TEACHER' 또는 'AI_NOTICE'
   teacherId: number | null
   content: string
   studentReadAt: string | null
   createdAt: string
-  sources: unknown[] // 공지 출처. 모양은 아직 확인 못 함
+  sources: AnswerSource[] // 공지로 답했을 때 근거 공지
 }
 
 // GET /api/questions/ (학생 목록)
@@ -110,3 +114,9 @@ export type TeacherQuestionDetail = {
 
 // POST /api/teacher/questions/:id/answer
 export type AnswerCreated = { id: number; questionId: number; content: string; createdAt: string }
+
+// GET /api/notices/ (목록에는 내용이 없다)
+export type NoticeItem = { id: number; title: string; authorId: number; createdAt: string }
+
+// GET /api/notices/:id, POST /api/notices/
+export type NoticeDetail = NoticeItem & { content: string }

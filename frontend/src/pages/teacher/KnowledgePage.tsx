@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { addMaterial, getKnowledge, type Knowledge } from '../../api/knowledge'
+import { addMaterial, getKnowledge, HAS_FULL_KNOWLEDGE, type Knowledge } from '../../api/knowledge'
 import { subscribeQuestions } from '../../api/questions'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
@@ -14,7 +14,7 @@ type Tab = 'answers' | 'notices' | 'materials'
 export default function KnowledgePage() {
   const teacher = useTeacher()
   const [data, setData] = useState<Knowledge | null>(null)
-  const [tab, setTab] = useState<Tab>('answers')
+  const [tab, setTab] = useState<Tab>(HAS_FULL_KNOWLEDGE ? 'answers' : 'notices')
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
 
@@ -80,6 +80,12 @@ export default function KnowledgePage() {
         ))}
       </div>
 
+      {!HAS_FULL_KNOWLEDGE && tab !== 'notices' && (
+        <p className="rounded-xl bg-page p-3 text-caption text-muted">
+          지금은 보낸 공지만 저장소에 쌓여요. 승인된 답 모아보기와 수업 자료 올리기는 백엔드 연동 후 지원돼요.
+        </p>
+      )}
+
       {tab === 'answers' && (
         <List empty="아직 승인된 답이 없어요">
           {answers.map(({ question, recipients }) => (
@@ -111,7 +117,7 @@ export default function KnowledgePage() {
 
       {tab === 'materials' && (
         <>
-          {adding ? (
+          {!HAS_FULL_KNOWLEDGE ? null : adding ? (
             <MaterialForm onSubmit={handleAdded} onCancel={() => setAdding(false)} />
           ) : (
             <Button variant="secondary" fullWidth onClick={() => setAdding(true)}>
