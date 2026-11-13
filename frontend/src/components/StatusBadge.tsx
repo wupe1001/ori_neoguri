@@ -1,7 +1,5 @@
+import type { QuestionStatus } from '../types/question'
 import { cn } from './cn'
-
-// 질문 진행 상태: 접수 → 전달됨 → 답변 완료
-export type QuestionStatus = 'received' | 'forwarded' | 'answered'
 
 const statusStyle: Record<QuestionStatus, { label: string; className: string }> = {
   received: { label: '접수', className: 'bg-page text-muted border border-line' },
