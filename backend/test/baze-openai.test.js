@@ -10,7 +10,7 @@ process.env.NOTICE_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SUFFICIENCY_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SUBJECT_CONFIDENCE_THRESHOLD ||= '0.8';
 
-const { BazeGenerationModel, parseGenerationResponse } = await import('../src/model-clients/baze-openai.js');
+const { BazeGenerationModel, finalQuestionSuggestionSchema, parseGenerationResponse } = await import('../src/model-clients/baze-openai.js');
 const { ModelError } = await import('../src/errors.js');
 const { z } = await import('zod');
 
@@ -87,4 +87,22 @@ test('생성 모델이 Responses API 원본 응답에서 답변을 반환한다'
   assert.equal(answer, '공지에 따른 답변입니다.');
   assert.equal(request.model, 'test-model');
   assert.equal(request.text.format.type, 'json_schema');
+});
+
+test('최종 질문 추천은 엄격한 단일 문자열 결과만 허용한다', () => {
+  const result = parseGenerationResponse(
+    responseWith('{"suggestedQuestion":"현재완료와 과거시제의 차이를 알려 주세요."}'),
+    finalQuestionSuggestionSchema,
+    'suggestedQuestion',
+  );
+  assert.deepEqual(result, { suggestedQuestion: '현재완료와 과거시제의 차이를 알려 주세요.' });
+
+  assert.throws(
+    () => parseGenerationResponse(
+      responseWith('{"suggestedQuestion":"질문","extra":true}'),
+      finalQuestionSuggestionSchema,
+      'suggestedQuestion',
+    ),
+    (error) => error instanceof ModelError && error.code === 'MODEL_INVALID_RESPONSE',
+  );
 });

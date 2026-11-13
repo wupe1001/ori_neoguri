@@ -7,7 +7,7 @@ import { nonEmptyString, pageBody, pagination, positiveId } from './helpers.js';
 export const teacherQuestionsRouter = Router();
 teacherQuestionsRouter.use(requireRole('TEACHER'));
 
-const statuses = new Set(['PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED']);
+const statuses = new Set(['PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','GENERATING_FINAL_QUESTION_SUGGESTION','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED']);
 
 teacherQuestionsRouter.get('/unread-count', (req, res) => {
   /* #swagger.tags = ['Teacher Questions']
@@ -26,7 +26,7 @@ teacherQuestionsRouter.get('/', (req, res) => {
   */
   /* #swagger.parameters['page'] = { in: 'query', type: 'integer', minimum: 1, default: 1 }
      #swagger.parameters['limit'] = { in: 'query', type: 'integer', minimum: 1, maximum: 100, default: 20 }
-     #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED'] }
+     #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','GENERATING_FINAL_QUESTION_SUGGESTION','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED'] }
      #swagger.parameters['routeType'] = { in: 'query', type: 'string', enum: ['SUBJECT', 'HOMEROOM'] }
      #swagger.parameters['unread'] = { in: 'query', type: 'boolean' }
   */

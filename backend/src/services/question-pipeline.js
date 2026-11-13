@@ -11,6 +11,7 @@ export const STAGES = Object.freeze({
   IMPROVEMENT_1: IMPROVEMENT_STAGES.STAGE_1,
   IMPROVEMENT_2: IMPROVEMENT_STAGES.STAGE_2,
   IMPROVEMENT_3: IMPROVEMENT_STAGES.STAGE_3,
+  FINAL_SUGGESTION: IMPROVEMENT_STAGES.FINAL_SUGGESTION,
 });
 
 const crisisMessage = '질문 내용에서 고민 또는 위기 신호가 확인되어 담임 선생님께 전달했습니다. 담임 선생님의 답변을 기다려 주세요.';
@@ -103,6 +104,7 @@ export class QuestionPipeline {
       [STAGES.IMPROVEMENT_1]: ['GENERATING_IMPROVEMENT_STAGE_1', () => this.improvement.generateStage1(questionId)],
       [STAGES.IMPROVEMENT_2]: ['GENERATING_IMPROVEMENT_STAGE_2', () => this.improvement.generateStage2(questionId)],
       [STAGES.IMPROVEMENT_3]: ['GENERATING_IMPROVEMENT_STAGE_3', () => this.improvement.generateStage3(questionId)],
+      [STAGES.FINAL_SUGGESTION]: ['GENERATING_FINAL_QUESTION_SUGGESTION', () => this.improvement.generateFinalSuggestion(questionId)],
     }[question.failed_stage];
     if (improvementRetry) {
       const [status, resume] = improvementRetry;

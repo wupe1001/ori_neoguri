@@ -20,6 +20,9 @@ export const improvementStage3Schema = z.object({
     bloomLevel: z.string().trim().min(1).max(200),
   }).strict()).min(2).max(4),
 }).strict();
+export const finalQuestionSuggestionSchema = z.object({
+  suggestedQuestion: z.string().trim().min(1).max(2000),
+}).strict();
 
 function invalidResponse(message, details = {}) {
   return new ModelError('MODEL_INVALID_RESPONSE', message, { retryable: true, details });
@@ -129,6 +132,16 @@ export class BazeGenerationModel {
       JSON.stringify(history),
     ].join('\n');
     return this.parse(input, improvementStage3Schema, 'improvement_stage_3', 'prompt');
+  }
+
+  async generateFinalQuestionSuggestion(history) {
+    const input = [
+      '학생이 질문 개선 과정을 지금 단계에서 마치려 합니다.',
+      '원 질문과 지금까지 실제로 저장된 개선 이력만 반영해, 교사나 공지 답변 파이프라인에 바로 전달할 수 있는 최종 질문 예시 하나를 간결한 한국어로 작성하세요.',
+      '학생이 답하지 않은 단계의 정보를 추측하거나 새로운 사실을 추가하지 마세요.',
+      JSON.stringify(history),
+    ].join('\n');
+    return this.parse(input, finalQuestionSuggestionSchema, 'final_question_suggestion', 'suggestedQuestion');
   }
 
   async answerFromNotices(question, notices) {

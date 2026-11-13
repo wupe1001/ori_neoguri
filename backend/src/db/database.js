@@ -21,7 +21,7 @@ export function migrateLegacyQuestionImprovement(database = db) {
         student_id INTEGER NOT NULL REFERENCES users(id),
         original_content TEXT NOT NULL,
         final_content TEXT,
-        status TEXT NOT NULL CHECK (status IN ('PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED')),
+        status TEXT NOT NULL CHECK (status IN ('PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','GENERATING_FINAL_QUESTION_SUGGESTION','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED')),
         route_type TEXT CHECK (route_type IN ('SUBJECT','HOMEROOM')),
         subject_id INTEGER REFERENCES subjects(id),
         assigned_teacher_id INTEGER REFERENCES users(id),
@@ -64,7 +64,54 @@ export function migrateLegacyQuestionImprovement(database = db) {
 }
 
 migrateLegacyQuestionImprovement();
+
+export function migrateFinalSuggestionStatus(database = db) {
+  const questionsTable = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'questions'").get();
+  if (!questionsTable?.sql || questionsTable.sql.includes('GENERATING_FINAL_QUESTION_SUGGESTION')) return;
+
+  database.pragma('foreign_keys = OFF');
+  try {
+    database.transaction(() => {
+      database.exec(`CREATE TABLE questions_v3 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL REFERENCES users(id),
+        original_content TEXT NOT NULL,
+        final_content TEXT,
+        status TEXT NOT NULL CHECK (status IN ('PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','GENERATING_FINAL_QUESTION_SUGGESTION','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED')),
+        route_type TEXT CHECK (route_type IN ('SUBJECT','HOMEROOM')),
+        subject_id INTEGER REFERENCES subjects(id),
+        assigned_teacher_id INTEGER REFERENCES users(id),
+        teacher_read_at TEXT,
+        failed_stage TEXT,
+        retry_status TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`);
+      database.exec(`INSERT INTO questions_v3
+        SELECT id, student_id, original_content, final_content, status, route_type, subject_id,
+          assigned_teacher_id, teacher_read_at, failed_stage, retry_status, created_at, updated_at
+        FROM questions`);
+      database.exec('DROP TABLE questions');
+      database.exec('ALTER TABLE questions_v3 RENAME TO questions');
+    })();
+  } finally {
+    database.pragma('foreign_keys = ON');
+  }
+  const foreignKeyError = database.prepare('PRAGMA foreign_key_check').get();
+  if (foreignKeyError) throw new Error(`최종 질문 추천 상태 마이그레이션 후 외래 키가 유효하지 않습니다: ${foreignKeyError.table}`);
+}
+
+migrateFinalSuggestionStatus();
 db.exec(schema);
+
+export function migrateFinalSuggestionColumn(database = db) {
+  const columns = database.prepare('PRAGMA table_info(question_improvements)').all();
+  if (!columns.some(({ name }) => name === 'final_suggestion')) {
+    database.exec('ALTER TABLE question_improvements ADD COLUMN final_suggestion TEXT');
+  }
+}
+
+migrateFinalSuggestionColumn();
 
 function migrateUserNickname() {
   const columns = db.prepare('PRAGMA table_info(users)').all();

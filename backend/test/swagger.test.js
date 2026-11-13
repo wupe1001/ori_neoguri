@@ -66,6 +66,15 @@ test('Swagger Try it out은 문서 서버와 같은 origin을 사용하고 응�
   }
 });
 
+test('Swagger 문서에 본문 없는 최종 질문 추천 API가 포함된다', () => {
+  const operation = swagger.paths['/api/questions/{questionId}/improvement/final-suggestion']?.post;
+  assert.ok(operation);
+  assert.equal(operation.parameters.some(({ in: location }) => location === 'body'), false);
+  assert.ok(operation.responses['200']);
+  assert.ok(operation.responses['409']);
+  assert.ok(operation.responses['503']);
+});
+
 test('Swagger 문서에 사용자 ID 조회 API와 안전한 응답 필드가 포함된다', () => {
   const operation = swagger.paths['/api/users/{userId}']?.get;
   assert.ok(operation);

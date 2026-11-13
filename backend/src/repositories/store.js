@@ -157,6 +157,40 @@ export const store = {
       return changed ? candidates : null;
     })();
   },
+  beginFinalQuestionSuggestion(questionId) {
+    return db.transaction(() => {
+      const row = db.prepare(`SELECT q.status, q.failed_stage AS failedStage, qi.final_suggestion AS suggestedQuestion
+        FROM questions q JOIN question_improvements qi ON qi.question_id = q.id WHERE q.id = ?`).get(questionId);
+      if (!row) return { kind: 'INVALID_STATE' };
+      if (row.suggestedQuestion) return { kind: 'CACHED', suggestedQuestion: row.suggestedQuestion };
+
+      const awaiting = new Set(['AWAITING_IMPROVEMENT_STAGE_1', 'AWAITING_IMPROVEMENT_STAGE_2']);
+      const improvementFailures = new Set([
+        'IMPROVEMENT_STAGE_1_GENERATION',
+        'IMPROVEMENT_STAGE_2_GENERATION',
+        'IMPROVEMENT_STAGE_3_GENERATION',
+      ]);
+      const allowed = awaiting.has(row.status)
+        || (row.status === 'PROCESSING_FAILED' && improvementFailures.has(row.failedStage));
+      if (!allowed) return { kind: 'INVALID_STATE' };
+
+      const changed = this.updateQuestion(questionId, {
+        status: 'GENERATING_FINAL_QUESTION_SUGGESTION', failed_stage: null, retry_status: null,
+      }, row.status);
+      return changed ? { kind: 'STARTED' } : { kind: 'INVALID_STATE' };
+    })();
+  },
+  saveFinalQuestionSuggestion(questionId, suggestedQuestion) {
+    return db.transaction(() => {
+      if (db.prepare('SELECT status FROM questions WHERE id = ?').get(questionId)?.status !== 'GENERATING_FINAL_QUESTION_SUGGESTION') return false;
+      const saved = db.prepare(`UPDATE question_improvements SET final_suggestion = ?
+        WHERE question_id = ? AND final_suggestion IS NULL`).run(suggestedQuestion, questionId).changes;
+      if (!saved) return false;
+      return Boolean(this.updateQuestion(questionId, {
+        status: 'AWAITING_FINAL_QUESTION', failed_stage: null, retry_status: null,
+      }, 'GENERATING_FINAL_QUESTION_SUGGESTION'));
+    })();
+  },
   finalizeImprovement(questionId, content) {
     return db.transaction(() => {
       const time = now();
@@ -181,7 +215,8 @@ export const store = {
     return db.prepare(`SELECT id, question_id AS questionId, stage1_prompt AS stage1Prompt,
       stage1_student_answer AS stage1StudentAnswer, stage2_prompt AS stage2Prompt,
       stage2_student_answer AS stage2StudentAnswer, stage3_prompt AS stage3Prompt,
-      final_question AS finalQuestion, created_at AS createdAt, completed_at AS completedAt
+      final_suggestion AS suggestedQuestion, final_question AS finalQuestion,
+      created_at AS createdAt, completed_at AS completedAt
       FROM question_improvements WHERE question_id = ?`).get(questionId) || null;
   },
   getImprovement(questionId) {
@@ -206,7 +241,7 @@ export const store = {
           bloomLevel: candidate.bloomLevel,
         })),
       },
-      stage4: { finalQuestion: record.finalQuestion },
+      stage4: { suggestedQuestion: record.suggestedQuestion, finalQuestion: record.finalQuestion },
     };
   },
   listStudentQuestions(studentId, limit, offset) {

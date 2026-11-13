@@ -110,6 +110,20 @@ studentQuestionsRouter.post('/:questionId/improvement/stage-2', async (req, res)
   res.json(await questionImprovement.generateStage3(questionId));
 });
 
+studentQuestionsRouter.post('/:questionId/improvement/final-suggestion', async (req, res) => {
+  /* #swagger.tags = ['Student Questions']
+     #swagger.summary = '남은 질문 개선 단계 건너뛰기'
+     #swagger.description = '현재까지 저장된 질문 개선 이력으로 최종 질문 추천 하나를 생성합니다. 1·2단계 응답 대기 또는 개선 단계 생성 실패 상태에서만 새로 생성하며, 중복 호출에는 최초 저장 결과를 반환합니다.'
+     #swagger.responses[200] = { description: '저장된 최종 질문 추천과 최종 질문 입력 대기 상태를 반환합니다.' }
+     #swagger.responses[409] = { description: '현재 질문 상태에서는 남은 개선 단계를 건너뛸 수 없습니다.' }
+     #swagger.responses[503] = { description: '외부 모델 처리에 실패했습니다.' }
+  */
+  /* #swagger.parameters['questionId'] = { in: 'path', required: true, type: 'integer', minimum: 1 } */
+  const questionId = positiveId(req.params.questionId, 'questionId');
+  ownedQuestion(questionId, req.session.userId);
+  res.json(await questionImprovement.requestFinalSuggestion(questionId));
+});
+
 studentQuestionsRouter.post('/:questionId/improvement/final', async (req, res) => {
   /* #swagger.tags = ['Student Questions']
      #swagger.summary = '질문 개선 최종 질문 확정'
