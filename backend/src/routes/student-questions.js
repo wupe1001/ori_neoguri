@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { AppError, conflict, notFound } from '../errors.js';
 import { requireRole } from '../middleware/auth.js';
 import { store } from '../repositories/store.js';
+import { questionImprovement } from '../services/question-improvement.js';
 import { questionPipeline } from '../services/question-pipeline.js';
 import { nonEmptyString, pageBody, pagination, positiveId } from './helpers.js';
 
@@ -65,47 +66,69 @@ studentQuestionsRouter.get('/', (req, res) => {
   res.json(pageBody(items, store.countStudentQuestions(req.session.userId), page, limit));
 });
 
-studentQuestionsRouter.post('/:questionId/details', async (req, res) => {
+studentQuestionsRouter.post('/:questionId/improvement/stage-1', async (req, res) => {
   /* #swagger.tags = ['Student Questions']
-     #swagger.summary = '질문 보완 정보 제출'
-     #swagger.description = 'NEEDS_DETAILS 상태인 본인 질문에 육하원칙 여섯 항목을 제출하고, AI가 재작성한 질문을 생성합니다.'
-     #swagger.responses[200] = { description: 'AI가 재작성한 질문을 반환합니다.' }
-     #swagger.responses[409] = { description: '질문이 보완 정보를 받을 수 있는 상태가 아닙니다.' }
+     #swagger.summary = '질문 개선 1단계 응답'
+     #swagger.description = '막힌 곳에 대한 학생의 텍스트 응답을 저장하고 AI가 실제 사례를 요청하는 2단계 프롬프트를 생성합니다.'
+     #swagger.responses[200] = { description: '2단계 프롬프트를 반환합니다.' }
+     #swagger.responses[409] = { description: '현재 질문 상태에서 1단계 응답을 제출할 수 없습니다.' }
      #swagger.responses[503] = { description: '외부 모델 처리에 실패했습니다.' }
   */
   /* #swagger.parameters['questionId'] = { in: 'path', required: true, type: 'integer', minimum: 1 } */
   /* #swagger.parameters['body'] = {
        in: 'body',
        required: true,
-       schema: { $ref: '#/definitions/QuestionDetailsRequest' }
+       schema: { $ref: '#/definitions/ImprovementAnswerRequest' }
   } */
   const questionId = positiveId(req.params.questionId, 'questionId');
   const question = ownedQuestion(questionId, req.session.userId);
-  if (question.status !== 'NEEDS_DETAILS') throw conflict('QUESTION_INVALID_STATE', '현재 질문 상태에서는 육하원칙을 제출할 수 없습니다.', { currentStatus: question.status });
-  const details = Object.fromEntries(['who', 'when', 'where', 'what', 'how', 'why'].map((key) => [key, nonEmptyString(req.body?.[key], key, 2000)]));
-  if (!store.submitDetails(questionId, details)) throw conflict('QUESTION_INVALID_STATE', '질문 상태가 이미 변경되었습니다.');
-  res.json(await questionPipeline.rewrite(questionId));
+  if (question.status !== 'AWAITING_IMPROVEMENT_STAGE_1') throw conflict('QUESTION_INVALID_STATE', '현재 질문 상태에서는 질문 개선 1단계 응답을 제출할 수 없습니다.', { currentStatus: question.status });
+  const answer = nonEmptyString(req.body?.answer, 'answer', 2000);
+  if (!store.submitImprovementStage1(questionId, answer)) throw conflict('QUESTION_INVALID_STATE', '질문 상태가 이미 변경되었습니다.');
+  res.json(await questionImprovement.generateStage2(questionId));
 });
 
-studentQuestionsRouter.post('/:questionId/confirmation', async (req, res) => {
+studentQuestionsRouter.post('/:questionId/improvement/stage-2', async (req, res) => {
   /* #swagger.tags = ['Student Questions']
-     #swagger.summary = '재작성 질문 확정'
-     #swagger.description = 'AWAITING_CONFIRMATION 상태인 본인 질문의 최종 문장을 확정하고 전체 처리 파이프라인을 다시 실행합니다.'
-     #swagger.responses[200] = { description: '확정된 질문의 처리 결과를 반환합니다.' }
-     #swagger.responses[409] = { description: '질문을 확정할 수 있는 상태가 아닙니다.' }
+     #swagger.summary = '질문 개선 2단계 응답'
+     #swagger.description = '학생이 제시한 실제 사례를 저장하고 AI가 서로 다른 깊이의 질문 후보를 생성합니다.'
+     #swagger.responses[200] = { description: '3단계 안내 프롬프트와 질문 후보를 반환합니다.' }
+     #swagger.responses[409] = { description: '현재 질문 상태에서 2단계 응답을 제출할 수 없습니다.' }
      #swagger.responses[503] = { description: '외부 모델 처리에 실패했습니다.' }
   */
   /* #swagger.parameters['questionId'] = { in: 'path', required: true, type: 'integer', minimum: 1 } */
   /* #swagger.parameters['body'] = {
        in: 'body',
        required: true,
-       schema: { $ref: '#/definitions/QuestionConfirmationRequest' }
+       schema: { $ref: '#/definitions/ImprovementAnswerRequest' }
   } */
   const questionId = positiveId(req.params.questionId, 'questionId');
   const question = ownedQuestion(questionId, req.session.userId);
-  if (question.status !== 'AWAITING_CONFIRMATION') throw conflict('QUESTION_INVALID_STATE', '현재 질문 상태에서는 재작성 질문을 확정할 수 없습니다.', { currentStatus: question.status });
+  if (question.status !== 'AWAITING_IMPROVEMENT_STAGE_2') throw conflict('QUESTION_INVALID_STATE', '현재 질문 상태에서는 질문 개선 2단계 응답을 제출할 수 없습니다.', { currentStatus: question.status });
+  const answer = nonEmptyString(req.body?.answer, 'answer', 2000);
+  if (!store.submitImprovementStage2(questionId, answer)) throw conflict('QUESTION_INVALID_STATE', '질문 상태가 이미 변경되었습니다.');
+  res.json(await questionImprovement.generateStage3(questionId));
+});
+
+studentQuestionsRouter.post('/:questionId/improvement/final', async (req, res) => {
+  /* #swagger.tags = ['Student Questions']
+     #swagger.summary = '질문 개선 최종 질문 확정'
+     #swagger.description = '학생이 후보를 참고해 작성한 최종 질문을 확정하고, 충분성 판단을 제외한 처리 파이프라인을 다시 실행합니다.'
+     #swagger.responses[200] = { description: '확정된 최종 질문의 처리 결과를 반환합니다.' }
+     #swagger.responses[409] = { description: '현재 질문 상태에서 최종 질문을 확정할 수 없습니다.' }
+     #swagger.responses[503] = { description: '외부 모델 처리에 실패했습니다.' }
+  */
+  /* #swagger.parameters['questionId'] = { in: 'path', required: true, type: 'integer', minimum: 1 } */
+  /* #swagger.parameters['body'] = {
+       in: 'body',
+       required: true,
+       schema: { $ref: '#/definitions/FinalQuestionRequest' }
+  } */
+  const questionId = positiveId(req.params.questionId, 'questionId');
+  const question = ownedQuestion(questionId, req.session.userId);
+  if (question.status !== 'AWAITING_FINAL_QUESTION') throw conflict('QUESTION_INVALID_STATE', '현재 질문 상태에서는 최종 질문을 확정할 수 없습니다.', { currentStatus: question.status });
   const content = nonEmptyString(req.body?.content, 'content', 2000);
-  if (!store.confirmQuestion(questionId, content)) throw conflict('QUESTION_INVALID_STATE', '질문 상태가 이미 변경되었습니다.');
+  if (!store.finalizeImprovement(questionId, content)) throw conflict('QUESTION_INVALID_STATE', '질문 상태가 이미 변경되었습니다.');
   res.json(await questionPipeline.run(questionId));
 });
 
@@ -166,7 +189,6 @@ studentQuestionsRouter.get('/:questionId', (req, res) => {
     id: row.id,
     originalContent: row.original_content,
     finalContent: row.final_content,
-    rewrittenContent: row.rewritten_content,
     status: row.status,
     routeType: row.route_type,
     subject: row.subject_id ? { id: row.subject_id, name: row.subject_name } : null,
@@ -174,7 +196,7 @@ studentQuestionsRouter.get('/:questionId', (req, res) => {
     retryStatus: row.retry_status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    details: store.getDetails(row.id),
+    improvement: store.getImprovement(row.id),
     answer: row.answer_id ? {
       id: row.answer_id, authorType: row.author_type, teacherId: row.answer_teacher_id,
       content: row.answer_content, studentReadAt: row.student_read_at, createdAt: row.answer_created_at, sources,

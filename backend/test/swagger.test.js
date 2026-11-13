@@ -8,8 +8,9 @@ const bodyContracts = [
   ['post', '/api/auth/login', 'LoginRequest', ['loginId', 'password']],
   ['post', '/api/notices/', 'NoticeRequest', ['title', 'content']],
   ['post', '/api/questions/', 'QuestionRequest', ['content']],
-  ['post', '/api/questions/{questionId}/details', 'QuestionDetailsRequest', ['who', 'when', 'where', 'what', 'how', 'why']],
-  ['post', '/api/questions/{questionId}/confirmation', 'QuestionConfirmationRequest', ['content']],
+  ['post', '/api/questions/{questionId}/improvement/stage-1', 'ImprovementAnswerRequest', ['answer']],
+  ['post', '/api/questions/{questionId}/improvement/stage-2', 'ImprovementAnswerRequest', ['answer']],
+  ['post', '/api/questions/{questionId}/improvement/final', 'FinalQuestionRequest', ['content']],
   ['post', '/api/questions/{questionId}/subject', 'SubjectSelectionRequest', ['subjectId']],
   ['post', '/api/teacher/questions/{questionId}/answer', 'AnswerRequest', ['content']],
 ];
@@ -63,4 +64,15 @@ test('Swagger Try it out은 문서 서버와 같은 origin을 사용하고 응�
       assert.ok(Object.keys(operation.responses ?? {}).length, `${method.toUpperCase()} ${path}의 responses가 비어 있습니다.`);
     }
   }
+});
+
+test('Swagger 문서에 사용자 ID 조회 API와 안전한 응답 필드가 포함된다', () => {
+  const operation = swagger.paths['/api/users/{userId}']?.get;
+  assert.ok(operation);
+  const userId = operation.parameters.find(({ name }) => name === 'userId');
+  assert.equal(userId.type, 'integer');
+  assert.equal(userId.minimum, 1);
+  assert.equal(operation.responses['200'].schema.$ref, '#/definitions/UserResponse');
+  assert.deepEqual(swagger.definitions.UserResponse.required, ['id', 'loginId', 'nickname', 'role', 'createdAt']);
+  assert.equal(swagger.definitions.UserResponse.properties.password, undefined);
 });

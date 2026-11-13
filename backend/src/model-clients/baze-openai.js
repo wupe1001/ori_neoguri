@@ -4,8 +4,22 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { ModelError } from '../errors.js';
 
-const rewriteSchema = z.object({ rewrittenQuestion: z.string().trim().min(1).max(2000) }).strict();
 const answerSchema = z.object({ answer: z.string().trim().min(1).max(5000) }).strict();
+export const improvementStage1Schema = z.object({
+  prompt: z.string().trim().min(1).max(2000),
+  exampleAnswers: z.array(z.string().trim().min(1).max(2000)).min(2).max(5),
+}).strict();
+export const improvementStage2Schema = z.object({
+  prompt: z.string().trim().min(1).max(2000),
+}).strict();
+export const improvementStage3Schema = z.object({
+  prompt: z.string().trim().min(1).max(2000),
+  candidates: z.array(z.object({
+    question: z.string().trim().min(1).max(2000),
+    type: z.string().trim().min(1).max(200),
+    bloomLevel: z.string().trim().min(1).max(200),
+  }).strict()).min(2).max(4),
+}).strict();
 
 function invalidResponse(message, details = {}) {
   return new ModelError('MODEL_INVALID_RESPONSE', message, { retryable: true, details });
@@ -88,18 +102,33 @@ export class BazeGenerationModel {
     }
   }
 
-  async rewriteQuestion(originalQuestion, details) {
+  async generateImprovementStage1(originalQuestion) {
     const input = [
-      '다음 학생의 원 질문과 육하원칙 정보를 모두 반영해 교사가 이해하기 쉬운 하나의 간결한 한국어 질문으로 재작성하세요. 정보를 추측하거나 추가하지 마세요.',
+      '학생의 원 질문만 바탕으로 질문 개선 1단계를 생성하세요.',
+      '학생이 어디까지 알고 어디에서 막혔는지 묻는 하나의 간결한 한국어 프롬프트와, 응답에 참고할 서로 다른 예시 답변 2~5개를 만드세요.',
+      '학생이 번호가 아니라 예시 문장 또는 자유 텍스트로 답할 수 있게 작성하세요.',
       `원 질문: ${originalQuestion}`,
-      `누가: ${details.who}`,
-      `언제: ${details.when}`,
-      `어디서: ${details.where}`,
-      `무엇을: ${details.what}`,
-      `어떻게: ${details.how}`,
-      `왜: ${details.why}`,
     ].join('\n');
-    return (await this.parse(input, rewriteSchema, 'rewritten_question', 'rewrittenQuestion')).rewrittenQuestion;
+    return this.parse(input, improvementStage1Schema, 'improvement_stage_1', 'prompt');
+  }
+
+  async generateImprovementStage2(history) {
+    const input = [
+      '다음 질문 개선 이력을 바탕으로 2단계를 생성하세요.',
+      '질문 유형을 미리 분류하지 말고, 학생이 헷갈린 실제 문장·문제·상황 등 적절한 사례 하나를 적도록 요청하는 간결한 한국어 프롬프트 하나만 만드세요.',
+      JSON.stringify(history),
+    ].join('\n');
+    return this.parse(input, improvementStage2Schema, 'improvement_stage_2', 'prompt');
+  }
+
+  async generateImprovementStage3(history) {
+    const input = [
+      '다음 질문 개선 전체 이력을 바탕으로 3단계를 생성하세요.',
+      '학생의 궁금증을 서로 다른 깊이로 표현한 질문 후보 2~4개와, 학생이 후보를 골라 자유롭게 고치도록 안내하는 간결한 한국어 프롬프트를 만드세요.',
+      '각 후보에는 질문 본문, 질문 유형, 적절한 블룸 분류 수준을 포함하세요. 후보 ID는 만들지 마세요.',
+      JSON.stringify(history),
+    ].join('\n');
+    return this.parse(input, improvementStage3Schema, 'improvement_stage_3', 'prompt');
   }
 
   async answerFromNotices(question, notices) {

@@ -26,7 +26,7 @@ authRouter.post('/login', (req, res, next) => {
       if (error) return next(error);
       req.session.userId = user.id;
       req.session.role = user.role;
-      res.json({ userId: user.id, role: user.role });
+      res.json({ userId: user.id, role: user.role, nickname: user.nickname });
     });
   } catch (error) { next(error); }
 });

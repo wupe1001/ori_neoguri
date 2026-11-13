@@ -9,6 +9,7 @@ import { noticesRouter } from './routes/notices.js';
 import { studentQuestionsRouter } from './routes/student-questions.js';
 import { subjectsRouter } from './routes/subjects.js';
 import { teacherQuestionsRouter } from './routes/teacher-questions.js';
+import { usersRouter } from './routes/users.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -37,6 +38,7 @@ app.get('/', (_req, res) => {
   res.json({ service: 'ori-neoguri-backend', status: 'ok' });
 });
 app.use('/api/auth', authRouter);
+app.use('/api/users', usersRouter);
 app.use('/api/subjects', subjectsRouter);
 app.use('/api/notices', noticesRouter);
 app.use('/api/questions', studentQuestionsRouter);

@@ -7,7 +7,7 @@ import { nonEmptyString, pageBody, pagination, positiveId } from './helpers.js';
 export const teacherQuestionsRouter = Router();
 teacherQuestionsRouter.use(requireRole('TEACHER'));
 
-const statuses = new Set(['PROCESSING','NEEDS_DETAILS','REWRITING','AWAITING_CONFIRMATION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED']);
+const statuses = new Set(['PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED']);
 
 teacherQuestionsRouter.get('/unread-count', (req, res) => {
   /* #swagger.tags = ['Teacher Questions']
@@ -26,7 +26,7 @@ teacherQuestionsRouter.get('/', (req, res) => {
   */
   /* #swagger.parameters['page'] = { in: 'query', type: 'integer', minimum: 1, default: 1 }
      #swagger.parameters['limit'] = { in: 'query', type: 'integer', minimum: 1, maximum: 100, default: 20 }
-     #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['PROCESSING','NEEDS_DETAILS','REWRITING','AWAITING_CONFIRMATION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED'] }
+     #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED'] }
      #swagger.parameters['routeType'] = { in: 'query', type: 'string', enum: ['SUBJECT', 'HOMEROOM'] }
      #swagger.parameters['unread'] = { in: 'query', type: 'boolean' }
   */
@@ -56,7 +56,7 @@ teacherQuestionsRouter.get('/', (req, res) => {
 teacherQuestionsRouter.get('/:questionId', (req, res) => {
   /* #swagger.tags = ['Teacher Questions']
      #swagger.summary = '배정 질문 상세 조회'
-     #swagger.description = '현재 교사에게 배정된 질문과 육하원칙 보완 정보를 조회합니다. 최초 상세 조회 시 질문을 읽음 처리합니다.'
+     #swagger.description = '현재 교사에게 배정된 질문과 전체 질문 개선 이력을 조회합니다. 최초 상세 조회 시 질문을 읽음 처리합니다.'
      #swagger.responses[200] = { description: '배정 질문 상세를 반환하고 읽음 처리합니다.' }
      #swagger.responses[404] = { description: '현재 교사에게 배정된 질문을 찾을 수 없습니다.' }
   */
@@ -73,7 +73,7 @@ teacherQuestionsRouter.get('/:questionId', (req, res) => {
     finalContent: question.final_content, status: question.status, routeType: question.route_type,
     subject: question.subject_id ? { id: question.subject_id, name: question.subject_name } : null,
     teacherReadAt: question.teacher_read_at, createdAt: question.created_at, updatedAt: question.updated_at,
-    details: store.getDetails(question.id),
+    improvement: store.getImprovement(question.id),
   });
 });
 

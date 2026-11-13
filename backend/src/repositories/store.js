@@ -4,10 +4,15 @@ export const now = () => new Date().toISOString();
 
 export const store = {
   findUserByCredentials(loginId, password) {
-    return db.prepare('SELECT id, role FROM users WHERE login_id = ? AND password = ?').get(loginId, password);
+    return db.prepare('SELECT id, role, nickname FROM users WHERE login_id = ? AND password = ?').get(loginId, password);
   },
   getUser(id) {
     return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  },
+  getPublicUser(id) {
+    return db.prepare(`SELECT id, login_id AS loginId, nickname, role,
+      homeroom_teacher_id AS homeroomTeacherId, created_at AS createdAt
+      FROM users WHERE id = ?`).get(id);
   },
   listSubjects() {
     return db.prepare('SELECT id, name, teacher_id AS teacherId FROM subjects ORDER BY id').all();
@@ -19,7 +24,7 @@ export const store = {
     return db.prepare('SELECT id, title, content, author_id AS authorId, created_at AS createdAt FROM notices ORDER BY created_at DESC').all();
   },
   listNotices(limit, offset) {
-    return db.prepare('SELECT id, title, author_id AS authorId, created_at AS createdAt FROM notices ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset);
+    return db.prepare('SELECT id, title, content, author_id AS authorId, created_at AS createdAt FROM notices ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset);
   },
   countNotices() { return db.prepare('SELECT COUNT(*) AS count FROM notices').get().count; },
   getNotice(id) {
@@ -73,23 +78,98 @@ export const store = {
     });
     return run();
   },
-  saveDetails(questionId, details) {
-    db.prepare('INSERT INTO question_details (question_id, who, when_text, where_text, what, how, why, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(questionId, details.who, details.when, details.where, details.what, details.how, details.why, now());
-  },
-  submitDetails(questionId, details) {
+  startImprovement(questionId) {
     return db.transaction(() => {
-      const changed = this.updateQuestion(questionId, { status: 'REWRITING' }, 'NEEDS_DETAILS');
+      const changed = this.updateQuestion(questionId, {
+        status: 'GENERATING_IMPROVEMENT_STAGE_1', failed_stage: null, retry_status: null,
+      }, 'PROCESSING');
       if (!changed) return false;
-      this.saveDetails(questionId, details);
+      db.prepare('INSERT INTO question_improvements (question_id, created_at) VALUES (?, ?)').run(questionId, now());
       return true;
     })();
   },
-  confirmQuestion(questionId, content) {
-    return this.updateQuestion(questionId, {
-      status: 'PROCESSING', final_content: content, route_type: null, subject_id: null,
-      assigned_teacher_id: null, teacher_read_at: null, failed_stage: null, retry_status: null,
-    }, 'AWAITING_CONFIRMATION');
+  ensureImprovement(questionId) {
+    db.prepare('INSERT OR IGNORE INTO question_improvements (question_id, created_at) VALUES (?, ?)').run(questionId, now());
+  },
+  saveImprovementStage1(questionId, result) {
+    return db.transaction(() => {
+      if (db.prepare('SELECT status FROM questions WHERE id = ?').get(questionId)?.status !== 'GENERATING_IMPROVEMENT_STAGE_1') return false;
+      const improvement = db.prepare('SELECT id FROM question_improvements WHERE question_id = ?').get(questionId);
+      if (!improvement) return false;
+      db.prepare('DELETE FROM question_improvement_suggestions WHERE improvement_id = ? AND stage = 1').run(improvement.id);
+      db.prepare('UPDATE question_improvements SET stage1_prompt = ? WHERE id = ?').run(result.prompt, improvement.id);
+      const insert = db.prepare(`INSERT INTO question_improvement_suggestions
+        (improvement_id, stage, suggestion_text, question_type, bloom_level, display_order)
+        VALUES (?, 1, ?, NULL, NULL, ?)`);
+      result.exampleAnswers.forEach((answer, index) => insert.run(improvement.id, answer, index));
+      return Boolean(this.updateQuestion(questionId, {
+        status: 'AWAITING_IMPROVEMENT_STAGE_1', failed_stage: null, retry_status: null,
+      }, 'GENERATING_IMPROVEMENT_STAGE_1'));
+    })();
+  },
+  submitImprovementStage1(questionId, answer) {
+    return db.transaction(() => {
+      const saved = db.prepare(`UPDATE question_improvements SET stage1_student_answer = ?
+        WHERE question_id = ? AND stage1_student_answer IS NULL
+          AND EXISTS (SELECT 1 FROM questions WHERE id = ? AND status = 'AWAITING_IMPROVEMENT_STAGE_1')`)
+        .run(answer, questionId, questionId).changes;
+      if (!saved) return false;
+      return Boolean(this.updateQuestion(questionId, { status: 'GENERATING_IMPROVEMENT_STAGE_2' }, 'AWAITING_IMPROVEMENT_STAGE_1'));
+    })();
+  },
+  saveImprovementStage2(questionId, result) {
+    return db.transaction(() => {
+      if (db.prepare('SELECT status FROM questions WHERE id = ?').get(questionId)?.status !== 'GENERATING_IMPROVEMENT_STAGE_2') return false;
+      const saved = db.prepare('UPDATE question_improvements SET stage2_prompt = ? WHERE question_id = ?').run(result.prompt, questionId).changes;
+      if (!saved) return false;
+      return Boolean(this.updateQuestion(questionId, {
+        status: 'AWAITING_IMPROVEMENT_STAGE_2', failed_stage: null, retry_status: null,
+      }, 'GENERATING_IMPROVEMENT_STAGE_2'));
+    })();
+  },
+  submitImprovementStage2(questionId, answer) {
+    return db.transaction(() => {
+      const saved = db.prepare(`UPDATE question_improvements SET stage2_student_answer = ?
+        WHERE question_id = ? AND stage2_student_answer IS NULL
+          AND EXISTS (SELECT 1 FROM questions WHERE id = ? AND status = 'AWAITING_IMPROVEMENT_STAGE_2')`)
+        .run(answer, questionId, questionId).changes;
+      if (!saved) return false;
+      return Boolean(this.updateQuestion(questionId, { status: 'GENERATING_IMPROVEMENT_STAGE_3' }, 'AWAITING_IMPROVEMENT_STAGE_2'));
+    })();
+  },
+  saveImprovementStage3(questionId, result) {
+    return db.transaction(() => {
+      if (db.prepare('SELECT status FROM questions WHERE id = ?').get(questionId)?.status !== 'GENERATING_IMPROVEMENT_STAGE_3') return null;
+      const improvement = db.prepare('SELECT id FROM question_improvements WHERE question_id = ?').get(questionId);
+      if (!improvement) return null;
+      db.prepare('DELETE FROM question_improvement_suggestions WHERE improvement_id = ? AND stage = 3').run(improvement.id);
+      db.prepare('UPDATE question_improvements SET stage3_prompt = ? WHERE id = ?').run(result.prompt, improvement.id);
+      const insert = db.prepare(`INSERT INTO question_improvement_suggestions
+        (improvement_id, stage, suggestion_text, question_type, bloom_level, display_order)
+        VALUES (?, 3, ?, ?, ?, ?)`);
+      const candidates = result.candidates.map((candidate, index) => {
+        const id = Number(insert.run(improvement.id, candidate.question, candidate.type, candidate.bloomLevel, index).lastInsertRowid);
+        return { id: `candidate_${id}`, ...candidate };
+      });
+      const changed = this.updateQuestion(questionId, {
+        status: 'AWAITING_FINAL_QUESTION', failed_stage: null, retry_status: null,
+      }, 'GENERATING_IMPROVEMENT_STAGE_3');
+      return changed ? candidates : null;
+    })();
+  },
+  finalizeImprovement(questionId, content) {
+    return db.transaction(() => {
+      const time = now();
+      const saved = db.prepare(`UPDATE question_improvements SET final_question = ?, completed_at = ?
+        WHERE question_id = ? AND completed_at IS NULL
+          AND EXISTS (SELECT 1 FROM questions WHERE id = ? AND status = 'AWAITING_FINAL_QUESTION')`)
+        .run(content, time, questionId, questionId).changes;
+      if (!saved) return false;
+      return Boolean(this.updateQuestion(questionId, {
+        status: 'PROCESSING', final_content: content, route_type: null, subject_id: null,
+        assigned_teacher_id: null, teacher_read_at: null, failed_stage: null, retry_status: null,
+      }, 'AWAITING_FINAL_QUESTION'));
+    })();
   },
   selectSubject(questionId, subject) {
     return this.updateQuestion(questionId, {
@@ -97,9 +177,37 @@ export const store = {
       assigned_teacher_id: subject.teacherId, failed_stage: null, retry_status: null,
     }, 'NEEDS_SUBJECT_SELECTION');
   },
-  getDetails(questionId) {
-    const row = db.prepare('SELECT who, when_text AS `when`, where_text AS `where`, what, how, why, created_at AS createdAt FROM question_details WHERE question_id = ?').get(questionId);
-    return row || null;
+  getImprovementRecord(questionId) {
+    return db.prepare(`SELECT id, question_id AS questionId, stage1_prompt AS stage1Prompt,
+      stage1_student_answer AS stage1StudentAnswer, stage2_prompt AS stage2Prompt,
+      stage2_student_answer AS stage2StudentAnswer, stage3_prompt AS stage3Prompt,
+      final_question AS finalQuestion, created_at AS createdAt, completed_at AS completedAt
+      FROM question_improvements WHERE question_id = ?`).get(questionId) || null;
+  },
+  getImprovement(questionId) {
+    const record = this.getImprovementRecord(questionId);
+    if (!record) return null;
+    const suggestions = db.prepare(`SELECT id, stage, suggestion_text AS suggestionText,
+      question_type AS questionType, bloom_level AS bloomLevel
+      FROM question_improvement_suggestions WHERE improvement_id = ? ORDER BY stage, display_order`).all(record.id);
+    return {
+      stage1: {
+        prompt: record.stage1Prompt,
+        exampleAnswers: suggestions.filter(({ stage }) => stage === 1).map(({ suggestionText }) => suggestionText),
+        studentAnswer: record.stage1StudentAnswer,
+      },
+      stage2: { prompt: record.stage2Prompt, studentAnswer: record.stage2StudentAnswer },
+      stage3: {
+        prompt: record.stage3Prompt,
+        candidates: suggestions.filter(({ stage }) => stage === 3).map((candidate) => ({
+          id: `candidate_${candidate.id}`,
+          question: candidate.suggestionText,
+          type: candidate.questionType,
+          bloomLevel: candidate.bloomLevel,
+        })),
+      },
+      stage4: { finalQuestion: record.finalQuestion },
+    };
   },
   listStudentQuestions(studentId, limit, offset) {
     return db.prepare(`SELECT q.id, COALESCE(q.final_content, q.original_content) AS content, q.status, q.route_type AS routeType,

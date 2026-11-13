@@ -1,10 +1,10 @@
 {
   "teachers": [
-    { "loginId": "teacher01", "password": "replace-me" },
-    { "loginId": "teacher02", "password": "replace-me" }
+    { "loginId": "teacher01", "password": "replace-me", "nickname": "김선생" },
+    { "loginId": "teacher02", "password": "replace-me", "nickname": "이선생" }
   ],
   "students": [
-    { "loginId": "student01", "password": "replace-me", "homeroomTeacherLoginId": "teacher01" }
+    { "loginId": "student01", "password": "replace-me", "nickname": "홍길동", "homeroomTeacherLoginId": "teacher01" }
   ],
   "subjects": [
     { "name": "국어", "teacherLoginId": "teacher01" },

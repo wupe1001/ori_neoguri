@@ -18,6 +18,7 @@ const document = {
     tags: [
         { name: 'Service', description: '서비스 상태 확인' },
         { name: 'Auth', description: '세션 로그인 및 로그아웃' },
+        { name: 'Users', description: 'ID 기반 사용자 계정 정보 조회' },
         { name: 'Subjects', description: '질문을 배정할 과목 조회' },
         { name: 'Notices', description: '학교 공지사항 조회 및 등록' },
         { name: 'Student Questions', description: '학생 질문 제출, 보완 및 답변 확인' },
@@ -28,6 +29,14 @@ const document = {
             $loginId: 'student01',
             $password: 'plain-password',
         },
+        UserResponse: {
+            $id: 1,
+            $loginId: 'teacher01',
+            $nickname: '김선생',
+            $role: 'TEACHER',
+            homeroomTeacherId: 1,
+            $createdAt: '2026-11-13T00:00:00.000Z',
+        },
         NoticeRequest: {
             $title: '중간고사 일정 안내',
             $content: '중간고사는 11월 20일부터 진행합니다.',
@@ -35,16 +44,11 @@ const document = {
         QuestionRequest: {
             $content: '중간고사는 언제 시작하나요?',
         },
-        QuestionDetailsRequest: {
-            $who: '저와 같은 반 학생들이',
-            $when: '오늘 점심시간에',
-            $where: '교실에서',
-            $what: '과제 제출 방법을',
-            $how: '서로 다르게 안내받아',
-            $why: '정확한 제출 방법을 확인하고 싶습니다',
+        ImprovementAnswerRequest: {
+            $answer: '과거시제와 무엇이 다른지 헷갈려요.',
         },
-        QuestionConfirmationRequest: {
-            $content: '오늘 점심시간에 안내받은 과제의 정확한 제출 방법을 알려 주세요.',
+        FinalQuestionRequest: {
+            $content: 'I have lost my key와 I lost my key의 차이와 시험에서 구분하는 방법을 알려 주세요.',
         },
         SubjectSelectionRequest: {
             $subjectId: 1,
