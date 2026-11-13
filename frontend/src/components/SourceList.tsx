@@ -14,7 +14,7 @@ export default function SourceList({ sources }: { sources: Source[] }) {
       <p className="text-caption font-semibold text-muted">출처</p>
       <ul className="mt-1 flex flex-col gap-1">
         {sources.map((s) => (
-          <li key={`${s.type}-${s.title}`} className="text-caption text-muted">
+          <li key={`${s.type}-${s.title}`} className="line-clamp-1 text-caption text-muted">
             [{typeLabel[s.type]}] {s.title}
           </li>
         ))}

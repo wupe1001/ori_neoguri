@@ -68,12 +68,44 @@ export function classify(text: string): QuestionCategory {
   return '생활'
 }
 
-// 저장소(공지)에서 질문과 겹치는 단어가 있는 자료를 근거로 찾는다
+// 어느 질문에나 나오는 말은 근거를 찾을 때 뺀다
+const STOP_WORDS = ['있어', '궁금', '언제', '어떻', '어디', '무엇', '뭐예', '하면', '되나', '알고', '질문', '선생', '공지', '에서', '이번', '저는', '제가', '그리', '관련', '때문', '여쭤']
+
+// 질문에서 비교할 단어 조각(앞 두 글자)을 뽑는다
+function keywords(text: string) {
+  const parts = text
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 2)
+    .map((w) => w.slice(0, 2))
+  return [...new Set(parts)].filter((w) => !STOP_WORDS.includes(w))
+}
+
+const score = (words: string[], target: string) => words.filter((w) => target.includes(w)).length
+
+// 답 근거 저장소(보낸 공지 + 승인된 답)에서 질문과 많이 겹치는 자료를 근거로 찾는다
 function findSources(text: string): Source[] {
-  const words = text.split(/\s+/).filter((w) => w.length >= 2)
-  return readDb()
-    .notices.filter((n) => words.some((w) => n.title.includes(w.slice(0, 2)) || n.body.includes(w.slice(0, 2))))
-    .map((n) => ({ type: 'notice' as const, title: n.title, excerpt: n.body }))
+  const words = keywords(text)
+  if (words.length === 0) return []
+  const db = readDb()
+
+  const fromNotices = db.notices.map((n) => ({
+    source: { type: 'notice' as const, title: n.title, excerpt: n.body },
+    score: score(words, `${n.title} ${n.body}`),
+  }))
+  // 승인된 답은 "질문"끼리 비교한다 (비슷한 질문의 답을 찾는다)
+  const fromAnswers = db.questions
+    .filter((q) => q.answer)
+    .map((q) => ({
+      source: { type: 'approved_answer' as const, title: q.rewrittenText, excerpt: q.answer!.text },
+      score: score(words, `${q.originalText} ${q.rewrittenText}`),
+    }))
+
+  return [...fromAnswers, ...fromNotices]
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score) // 같은 점수면 승인된 답이 먼저
+    .slice(0, 3)
+    .map((s) => s.source)
 }
 
 // TODO(백엔드): POST /api/ai/chatbot
@@ -83,7 +115,9 @@ export async function askChatbot(text: string): Promise<ChatbotReply> {
   await delay(800)
   const sources = findSources(text)
   if (sources.length === 0) return { answer: null, sources: [] }
-  return { answer: `공지에 따르면, ${sources[0].excerpt}`, sources }
+  const top = sources[0]
+  const lead = top.type === 'approved_answer' ? '비슷한 질문에 선생님이 이렇게 답했어요.' : `'${top.title}' 공지에 따르면,`
+  return { answer: `${lead} ${top.excerpt}`, sources }
 }
 
 // TODO(백엔드): GET /api/questions/:id/draft
@@ -93,7 +127,10 @@ export async function getAnswerDraft(questionText: string): Promise<AnswerDraft>
   await delay(800)
   const sources = findSources(questionText)
   if (sources.length === 0) return { text: '', sources: [] }
-  return { text: `안녕하세요. ${sources[0].excerpt} 더 궁금한 점이 있으면 다시 질문해 주세요.`, sources }
+  const top = sources[0]
+  // 비슷한 질문에 승인된 답이 있으면 그 답을 그대로 초안으로 쓴다
+  if (top.type === 'approved_answer') return { text: top.excerpt, sources }
+  return { text: `안녕하세요. ${top.excerpt} 더 궁금한 점이 있으면 다시 질문해 주세요.`, sources }
 }
 
 // TODO(백엔드): GET /api/questions/:id/recommend-department
