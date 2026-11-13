@@ -68,7 +68,7 @@ export default function MyQuestionsPage() {
         <div className="flex flex-col items-center gap-3 py-16 text-muted">
           <p>{filter === 'ongoing' ? '진행 중인 질문이 없어요' : '아직 답을 받은 질문이 없어요'}</p>
           {filter === 'ongoing' && (
-            <Link to={ROUTES.STUDENT.ASK}>
+            <Link to={ROUTES.STUDENT.HOME}>
               <Button size="sm">질문하러 가기</Button>
             </Link>
           )}

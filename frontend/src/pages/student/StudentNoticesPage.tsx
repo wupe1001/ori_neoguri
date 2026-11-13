@@ -42,7 +42,7 @@ export default function StudentNoticesPage() {
 
   // 공지 제목을 붙여서 질문하기 화면으로 보낸다
   const askAbout = (n: Notice) =>
-    navigate(ROUTES.STUDENT.ASK, { state: { initialText: `'${n.title}' 공지에서 궁금한 게 있어요. ` } })
+    navigate(ROUTES.STUDENT.HOME, { state: { initialText: `'${n.title}' 공지에서 궁금한 게 있어요. ` } })
 
   return (
     <div className="flex flex-col gap-4">

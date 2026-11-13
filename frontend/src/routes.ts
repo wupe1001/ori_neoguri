@@ -6,7 +6,6 @@ export const ROUTES = {
 
   STUDENT: {
     HOME: '/student',
-    ASK: '/student/ask',
     // 홈의 "도움이 필요해요" → 상담 선생님 연결
     HELP: '/student/help',
     QUESTIONS: '/student/questions',

@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 
 import StudentLayout from './layouts/StudentLayout'
 import TeacherLayout from './layouts/TeacherLayout'
@@ -9,7 +9,6 @@ import NotFoundPage from './pages/NotFoundPage'
 import UiPreviewPage from './pages/UiPreviewPage'
 
 import StudentHomePage from './pages/student/StudentHomePage'
-import AskPage from './pages/student/AskPage'
 import HelpPage from './pages/student/HelpPage'
 import MyQuestionsPage from './pages/student/MyQuestionsPage'
 import QuestionDetailPage from './pages/student/QuestionDetailPage'
@@ -39,7 +38,8 @@ export default function App() {
           }
         >
           <Route index element={<StudentHomePage />} />
-          <Route path="ask" element={<AskPage />} />
+          {/* 질문하기는 홈(채팅)으로 합쳐졌다. 예전 주소로 오면 홈으로 보낸다 */}
+          <Route path="ask" element={<Navigate to="/student" replace />} />
           <Route path="help" element={<HelpPage />} />
           <Route path="questions" element={<MyQuestionsPage />} />
           <Route path="questions/:id" element={<QuestionDetailPage />} />
