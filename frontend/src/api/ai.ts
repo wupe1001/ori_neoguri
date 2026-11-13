@@ -2,6 +2,7 @@ import type {
   AnswerDraft,
   ChatbotReply,
   FiveW1H,
+  Question,
   QuestionCategory,
   ScreenResult,
   Source,
@@ -131,6 +132,24 @@ export async function getAnswerDraft(questionText: string): Promise<AnswerDraft>
   // 비슷한 질문에 승인된 답이 있으면 그 답을 그대로 초안으로 쓴다
   if (top.type === 'approved_answer') return { text: top.excerpt, sources }
   return { text: `안녕하세요. ${top.excerpt} 더 궁금한 점이 있으면 다시 질문해 주세요.`, sources }
+}
+
+// TODO(백엔드): GET /api/questions/:id/similar
+
+// 같은 담당에게 온, 아직 답하지 않은 비슷한 질문 (승인할 때 같은 답을 함께 보낸다)
+export async function findSimilarQuestions(questionId: string): Promise<Question[]> {
+  await delay(300)
+  const all = readDb().questions
+  const base = all.find((q) => q.id === questionId)
+  if (!base) return []
+  const words = keywords(`${base.originalText} ${base.rewrittenText}`)
+  return all.filter(
+    (q) =>
+      q.id !== base.id &&
+      q.status !== 'answered' &&
+      JSON.stringify(q.assignee) === JSON.stringify(base.assignee) &&
+      score(words, `${q.originalText} ${q.rewrittenText}`) >= 2,
+  )
 }
 
 // TODO(백엔드): GET /api/questions/:id/recommend-department

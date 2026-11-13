@@ -34,7 +34,7 @@ export default function DoneStep(props: Props) {
           <p>담당 선생님 질문함으로 보냈어요.</p>
           <StatusBadge status="received" />
         </div>
-        <p className="mt-2 text-caption text-muted">답이 오면 알려줄게요. 같은 질문을 한 친구들도 함께 받아요.</p>
+        <p className="mt-2 text-caption text-muted">답이 오면 알려줄게요. 비슷한 질문을 한 친구가 있으면 같은 답을 함께 받아요.</p>
       </Card>
       <Button fullWidth onClick={() => navigate(ROUTES.STUDENT.QUESTION_DETAIL(props.questionId))}>
         내 질문 보기

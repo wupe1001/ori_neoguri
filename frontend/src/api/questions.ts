@@ -88,13 +88,33 @@ function updateQuestion(id: string, update: (q: Question) => void): Question {
 
 // TODO(백엔드): POST /api/questions/:id/answer
 
-// 교사: 답을 고쳐서 승인 → 답변 완료
-export async function approveAnswer(id: string, teacher: Teacher, text: string, sources: Source[]): Promise<Question> {
+// 교사: 답을 고쳐서 승인 → 답변 완료.
+// alsoIds에 넣은 비슷한 질문들에도 같은 답을 보낸다.
+export async function approveAnswer(
+  id: string,
+  teacher: Teacher,
+  text: string,
+  sources: Source[],
+  alsoIds: string[] = [],
+): Promise<Question> {
   await delay()
-  return updateQuestion(id, (q) => {
+  const db = readDb()
+  const targets = db.questions.filter((q) => q.id === id || alsoIds.includes(q.id))
+  const main = targets.find((q) => q.id === id)
+  if (!main) throw new Error('질문을 찾을 수 없어요.')
+  const answer = {
+    text,
+    teacherName: teacher.name,
+    sources,
+    answeredAt: new Date().toISOString(),
+    recipients: targets.length,
+  }
+  for (const q of targets) {
     q.status = 'answered'
-    q.answer = { text, teacherName: teacher.name, sources, answeredAt: new Date().toISOString() }
-  })
+    q.answer = { ...answer }
+  }
+  writeDb(db)
+  return main
 }
 
 // TODO(백엔드): POST /api/questions/:id/forward

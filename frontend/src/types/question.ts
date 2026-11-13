@@ -28,6 +28,8 @@ export type Answer = {
   teacherName: string
   sources: Source[]
   answeredAt: string // ISO 날짜
+  // 같은 답을 함께 받은 질문 수 (이 질문 포함). 1이면 혼자 받은 답
+  recipients: number
 }
 
 // 담당: 교사 개인 질문함 또는 부서 질문함

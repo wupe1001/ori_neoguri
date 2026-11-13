@@ -79,7 +79,9 @@ export default function QuestionDetailPage() {
           <p className="whitespace-pre-line">{question.answer.text}</p>
           <SourceList sources={question.answer.sources} />
           <p className="mt-3 text-caption text-muted">
-            {timeAgo(question.answer.answeredAt)} · 같은 질문을 한 친구들도 함께 받았어요
+            {timeAgo(question.answer.answeredAt)}
+            {(question.answer.recipients ?? 1) > 1 &&
+              ` · 같은 질문을 한 친구 ${question.answer.recipients - 1}명도 함께 받았어요`}
           </p>
         </Card>
       ) : (

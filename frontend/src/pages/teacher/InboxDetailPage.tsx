@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { getAnswerDraft, recommendDepartment } from '../../api/ai'
+import { findSimilarQuestions, getAnswerDraft, recommendDepartment } from '../../api/ai'
 import { approveAnswer, forwardQuestion, getQuestion } from '../../api/questions'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
+import Checkbox from '../../components/Checkbox'
 import CategoryBadge from '../../components/CategoryBadge'
 import { cn } from '../../components/cn'
 import Loading from '../../components/Loading'
@@ -37,9 +38,12 @@ export default function InboxDetailPage() {
   const [answerText, setAnswerText] = useState('')
   const [mode, setMode] = useState<'answer' | 'forward'>('answer')
   const [saving, setSaving] = useState(false)
-  const [justAnswered, setJustAnswered] = useState(false)
+  const [justAnswered, setJustAnswered] = useState<number | null>(null) // 함께 답한 질문 수
+  // 아직 답하지 않은 비슷한 질문. 승인하면 선택한 질문에도 같은 답이 간다
+  const [similar, setSimilar] = useState<Question[]>([])
+  const [alsoIds, setAlsoIds] = useState<string[]>([])
 
-  // 질문을 불러오고, 아직 답하지 않았으면 AI 답 초안도 불러온다
+  // 질문을 불러오고, 아직 답하지 않았으면 AI 답 초안과 비슷한 질문도 불러온다
   useEffect(() => {
     let cancelled = false
     getQuestion(id)
@@ -47,10 +51,12 @@ export default function InboxDetailPage() {
         if (cancelled) return
         setQuestion(q)
         if (q.status === 'answered') return
-        const d = await getAnswerDraft(q.rewrittenText)
+        const [d, similarList] = await Promise.all([getAnswerDraft(q.rewrittenText), findSimilarQuestions(q.id)])
         if (cancelled) return
         setDraft(d)
         setAnswerText(d.text)
+        setSimilar(similarList)
+        setAlsoIds(similarList.map((x) => x.id))
       })
       .catch((err: Error) => {
         if (!cancelled) setLoadError(err.message)
@@ -66,8 +72,8 @@ export default function InboxDetailPage() {
   const handleApprove = async () => {
     setSaving(true)
     try {
-      setQuestion(await approveAnswer(question.id, teacher, answerText.trim(), draft?.sources ?? []))
-      setJustAnswered(true)
+      setQuestion(await approveAnswer(question.id, teacher, answerText.trim(), draft?.sources ?? [], alsoIds))
+      setJustAnswered(alsoIds.length)
       window.scrollTo({ top: 0 })
     } finally {
       setSaving(false)
@@ -90,9 +96,10 @@ export default function InboxDetailPage() {
         ← 질문함
       </button>
 
-      {justAnswered && (
+      {justAnswered !== null && (
         <p className="rounded-xl bg-success-soft p-3 text-caption text-success">
           답을 보냈어요. 학생 화면에 '답변 완료'로 표시돼요.
+          {justAnswered > 0 && ` 비슷한 질문 ${justAnswered}개에도 같은 답을 함께 보냈어요.`}
         </p>
       )}
 
@@ -142,6 +149,9 @@ export default function InboxDetailPage() {
           draft={draft}
           value={answerText}
           onChange={setAnswerText}
+          similar={similar}
+          alsoIds={alsoIds}
+          onAlsoIdsChange={setAlsoIds}
           saving={saving}
           onApprove={handleApprove}
           onForward={() => setMode('forward')}
@@ -162,13 +172,29 @@ type AnswerPanelProps = {
   draft: AnswerDraft
   value: string
   onChange: (value: string) => void
+  similar: Question[]
+  alsoIds: string[]
+  onAlsoIdsChange: (ids: string[]) => void
   saving: boolean
   onApprove: () => void
   onForward: () => void
 }
 
 // 내 담당이면: AI 초안을 검토하고 고친 뒤 승인
-function AnswerPanel({ draft, value, onChange, saving, onApprove, onForward }: AnswerPanelProps) {
+function AnswerPanel({
+  draft,
+  value,
+  onChange,
+  similar,
+  alsoIds,
+  onAlsoIdsChange,
+  saving,
+  onApprove,
+  onForward,
+}: AnswerPanelProps) {
+  const toggle = (qid: string) =>
+    onAlsoIdsChange(alsoIds.includes(qid) ? alsoIds.filter((x) => x !== qid) : [...alsoIds, qid])
+
   return (
     <div className="flex flex-col gap-3">
       <TextArea
@@ -183,8 +209,24 @@ function AnswerPanel({ draft, value, onChange, saving, onApprove, onForward }: A
           <SourceList sources={draft.sources} />
         </Card>
       )}
+      {similar.length > 0 && (
+        <Card title={`AI가 찾은 비슷한 질문 ${similar.length}개 · 같은 답을 함께 보내요`}>
+          <ul className="flex flex-col gap-2">
+            {similar.map((q) => (
+              <li key={q.id} className="flex flex-col gap-0.5">
+                <Checkbox
+                  label={authorLabel(q.author)}
+                  checked={alsoIds.includes(q.id)}
+                  onChange={() => toggle(q.id)}
+                />
+                <p className="line-clamp-2 pl-6 text-caption text-muted">{q.rewrittenText}</p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <Button fullWidth disabled={!value.trim() || saving} onClick={onApprove}>
-        {saving ? '보내는 중…' : '승인하고 보내기'}
+        {saving ? '보내는 중…' : alsoIds.length > 0 ? `승인하고 ${alsoIds.length + 1}명에게 보내기` : '승인하고 보내기'}
       </Button>
       <Button variant="secondary" fullWidth disabled={saving} onClick={onForward}>
         내 담당이 아니에요 · 다른 부서로 넘기기
