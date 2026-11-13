@@ -44,3 +44,12 @@ export function delay(ms = 400) {
 export function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
 }
+
+// 다른 탭에서 저장소가 바뀌면 알려준다 (브라우저 storage 이벤트는 다른 탭의 변경에만 발생)
+export function subscribeDb(onChange: () => void) {
+  const handler = (e: StorageEvent) => {
+    if (e.key === KEY) onChange()
+  }
+  window.addEventListener('storage', handler)
+  return () => window.removeEventListener('storage', handler)
+}

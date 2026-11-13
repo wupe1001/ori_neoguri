@@ -15,3 +15,8 @@ export function timeAgo(iso: string) {
   const d = new Date(iso)
   return `${d.getMonth() + 1}월 ${d.getDate()}일`
 }
+
+// 다른 부서로 넘어갔으면 "교무부로 전달됨", 아니면 null
+export function forwardedLabel(q: Question) {
+  return q.status === 'forwarded' && q.assignee.type === 'department' ? `${q.assignee.department}로 전달됨` : null
+}

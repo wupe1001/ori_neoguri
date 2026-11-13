@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { getInbox } from '../../api/questions'
+import { getInbox, subscribeQuestions } from '../../api/questions'
 import Card from '../../components/Card'
 import CategoryBadge from '../../components/CategoryBadge'
 import { cn } from '../../components/cn'
@@ -31,13 +31,18 @@ export default function InboxPage() {
 
   const [questions, setQuestions] = useState<Question[] | null>(null)
 
+  // 처음 불러오고, 다른 탭(학생)에서 질문을 보내면 다시 불러온다
   useEffect(() => {
     let cancelled = false
-    getInbox(teacher, box).then((list) => {
-      if (!cancelled) setQuestions(sortQuestions(list))
-    })
+    const load = () =>
+      getInbox(teacher, box).then((list) => {
+        if (!cancelled) setQuestions(sortQuestions(list))
+      })
+    load()
+    const unsubscribe = subscribeQuestions(load)
     return () => {
       cancelled = true
+      unsubscribe()
     }
   }, [teacher, box])
 

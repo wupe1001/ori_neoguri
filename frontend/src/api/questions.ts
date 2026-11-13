@@ -1,7 +1,7 @@
 import type { FiveW1H, Question, Source } from '../types/question'
 import type { Department, Student, Teacher } from '../types/user'
 import { classify } from './ai'
-import { delay, newId, readDb, writeDb } from './mock/db'
+import { delay, newId, readDb, subscribeDb, writeDb } from './mock/db'
 import { TEACHER_CODES } from './mock/seed'
 
 // 질문 관련 API의 목업
@@ -107,4 +107,11 @@ export async function forwardQuestion(id: string, department: Department, reason
     q.assignee = { type: 'department', department }
     q.forwardReason = reason
   })
+}
+
+// TODO(백엔드): 폴링(예: 5초마다 다시 불러오기) 또는 웹소켓으로 교체
+
+// 질문 데이터가 바뀌면 onChange를 부른다. 반환값은 구독 해제 함수.
+export function subscribeQuestions(onChange: () => void) {
+  return subscribeDb(onChange)
 }
