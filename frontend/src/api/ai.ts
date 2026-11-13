@@ -107,11 +107,19 @@ function findSources(text: string): Source[] {
     score: score(words, `${m.title} ${m.body}`),
   }))
 
+  // 같은 질문에 같은 답이 여러 번 저장돼 있을 수 있어서 (함께 보낸 답, 같은 질문 반복) 하나로 합친다
+  const seen = new Set<string>()
   return [...fromAnswers, ...fromNotices, ...fromMaterials]
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score) // 같은 점수면 승인된 답이 먼저
-    .slice(0, 3)
     .map((s) => s.source)
+    .filter((s) => {
+      const key = `${s.type}|${s.title}|${s.excerpt}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .slice(0, 3)
 }
 
 // TODO(백엔드): POST /api/ai/chatbot
@@ -179,7 +187,11 @@ export type TopQuestion = {
   example: string // 대표 질문
 }
 
+// 주제(개념) 목록. 위에 있을수록 먼저 묶인다. 실제로는 AI가 질문 내용을 보고 묶는다.
 const TOPICS: [string, RegExp][] = [
+  ['이차함수 꼭짓점·그래프', /이차함수|꼭짓점|포물선|판별식/],
+  ['확률·경우의 수', /확률|경우의 수/],
+  ['문법·맞춤법', /문법|품사|맞춤법|띄어쓰기/],
   ['체험학습 신청', /체험학습/],
   ['수행평가 기준', /수행|보고서/],
   ['시험 범위·일정', /시험|기말|중간/],
@@ -197,6 +209,55 @@ export async function getTopQuestions(questions: { rewrittenText: string }[]): P
     .filter((t) => t.count > 0)
     .sort((a, b) => b.count - a.count)
     .slice(0, 3)
+}
+
+// TODO(백엔드): GET /api/teachers/:id/clusters
+
+export type QuestionCluster = {
+  topic: string
+  questions: Question[]
+  studentCount: number // 질문한 학생 수 (같은 학생이 여러 번 물어도 1명)
+}
+
+// 교사: 질문을 개념별로 묶는다. 어느 주제에도 안 맞는 질문은 unclustered로 돌려준다.
+export async function getClusters(
+  questions: Question[],
+): Promise<{ clusters: QuestionCluster[]; unclustered: Question[] }> {
+  await delay(600)
+  const groups = new Map<string, Question[]>()
+  const unclustered: Question[] = []
+  for (const q of questions) {
+    const text = `${q.originalText} ${q.rewrittenText}`
+    const topic = TOPICS.find(([, pattern]) => pattern.test(text))?.[0]
+    if (!topic) unclustered.push(q)
+    else groups.set(topic, [...(groups.get(topic) ?? []), q])
+  }
+  const clusters = [...groups.entries()]
+    .map(([topic, list]) => ({ topic, questions: list, studentCount: new Set(list.map((q) => q.studentId)).size }))
+    .sort((a, b) => b.studentCount - a.studentCount || b.questions.length - a.questions.length)
+  return { clusters, unclustered }
+}
+
+// TODO(백엔드): POST /api/ai/lesson-draft
+
+// 교사: 묶음을 보고 다음 수업 보충 설명 초안을 쓴다
+export async function getLessonDraft(cluster: QuestionCluster): Promise<string> {
+  await delay(900)
+  const examples = cluster.questions
+    .slice(0, 2)
+    .map((q) => `- "${q.originalText}"`)
+    .join('\n')
+  return [
+    `[다음 수업 도입 5분] ${cluster.topic}`,
+    '',
+    `학생 ${cluster.studentCount}명이 이 부분에서 막혔어요. 자주 나온 질문:`,
+    examples,
+    '',
+    '보충 설명 순서 제안',
+    `1. ${cluster.topic}의 핵심 개념을 한 문장으로 다시 정리해요.`,
+    '2. 학생들이 헷갈린 지점을 예제 하나로 직접 풀어 보여줘요.',
+    '3. 비슷한 문제 하나를 짝과 함께 풀게 하고, 남은 질문을 받아요.',
+  ].join('\n')
 }
 
 // TODO(백엔드): GET /api/notices/draft

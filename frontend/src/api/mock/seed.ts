@@ -1,6 +1,9 @@
 import type { Notice, Question } from '../../types/question'
 import type { ClassRef, Teacher } from '../../types/user'
 
+// 시연 날짜와 상관없이 "3시간 전"처럼 보이도록 지금 기준으로 날짜를 만든다
+const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+
 // 시연용 반 코드: 학생이 닉네임과 함께 입력한다.
 export const CLASS_CODES: Record<string, ClassRef> = {
   DUCK23: { grade: 2, classNo: 3 },
@@ -42,7 +45,7 @@ export const SEED_NOTICES: Notice[] = [
       { grade: 2, classNo: 3 },
       { grade: 2, classNo: 4 },
     ],
-    sentAt: '2026-11-10T09:00:00+09:00',
+    sentAt: hoursAgo(24 * 3),
   },
   {
     id: 'n-2',
@@ -53,7 +56,7 @@ export const SEED_NOTICES: Notice[] = [
       { grade: 2, classNo: 3 },
       { grade: 2, classNo: 4 },
     ],
-    sentAt: '2026-11-12T09:00:00+09:00',
+    sentAt: hoursAgo(24 + 2),
   },
 ]
 
@@ -80,6 +83,97 @@ export const SEED_QUESTIONS: Question[] = [
     assignee: { type: 'teacher', teacherId: 't-kim' },
     forwardReason: null,
     answer: null,
-    createdAt: '2026-11-13T08:20:00+09:00',
+    createdAt: hoursAgo(3),
+  },
+  // 질문 묶음 시연용: 이차함수 꼭짓점에서 2명이 막힘
+  {
+    id: 'q-seed-2',
+    studentId: 's-seed-2',
+    isAnonymous: false,
+    author: { grade: 2, classNo: 3, nickname: '감자' },
+    originalText: '이차함수 꼭짓점은 어떻게 구해요?',
+    fiveW1H: {
+      who: '2학년 3반 감자',
+      when: '어제 수학 수업',
+      where: null,
+      what: '이차함수 꼭짓점 구하는 방법',
+      how: '완전제곱식으로?',
+      why: '숙제 문제를 못 풀어서',
+    },
+    rewrittenText:
+      '어제 수학 수업 관련 질문이에요. 숙제 문제를 못 풀어서 여쭤봐요. 이차함수 꼭짓점은 어떻게 구해요? 완전제곱식으로 하면 되는지도 궁금해요.',
+    category: '교과',
+    status: 'received',
+    assignee: { type: 'teacher', teacherId: 't-kim' },
+    forwardReason: null,
+    answer: null,
+    createdAt: hoursAgo(2),
+  },
+  {
+    id: 'q-seed-3',
+    studentId: 's-seed-3',
+    isAnonymous: true,
+    author: { grade: 2, classNo: 3, nickname: null },
+    originalText: '이차함수 그래프 그릴 때 꼭짓점부터 찍어야 해요?',
+    fiveW1H: {
+      who: '2학년 3반 학생 (익명)',
+      when: null,
+      where: null,
+      what: '이차함수 그래프 그리는 순서',
+      how: null,
+      why: null,
+    },
+    rewrittenText: '이차함수 그래프 그릴 때 꼭짓점부터 찍어야 해요?',
+    category: '교과',
+    status: 'received',
+    assignee: { type: 'teacher', teacherId: 't-kim' },
+    forwardReason: null,
+    answer: null,
+    createdAt: hoursAgo(1),
+  },
+  {
+    id: 'q-seed-4',
+    studentId: 's-seed-4',
+    isAnonymous: true,
+    author: { grade: 2, classNo: 3, nickname: null },
+    originalText: '체험학습 신청서 종이로 내도 되나요?',
+    fiveW1H: {
+      who: '2학년 3반 학생 (익명)',
+      when: '다음 주',
+      where: null,
+      what: '체험학습 신청서 제출 방법',
+      how: '종이 신청서',
+      why: '가족 행사',
+    },
+    rewrittenText:
+      '다음 주 관련 질문이에요. 가족 행사 때문에 여쭤봐요. 체험학습 신청서 종이로 내도 되나요? 종이 신청서(으)로 하면 되는지도 궁금해요.',
+    category: '생활',
+    status: 'received',
+    assignee: { type: 'teacher', teacherId: 't-kim' },
+    forwardReason: null,
+    answer: null,
+    createdAt: hoursAgo(20),
+  },
+  {
+    id: 'q-seed-5',
+    studentId: 's-seed-2',
+    isAnonymous: false,
+    author: { grade: 2, classNo: 3, nickname: '감자' },
+    originalText: '기말고사 수학 시험 범위가 어디까지예요?',
+    fiveW1H: {
+      who: '2학년 3반 감자',
+      when: '기말고사',
+      where: null,
+      what: '수학 시험 범위',
+      how: null,
+      why: null,
+    },
+    rewrittenText: '기말고사 관련 질문이에요. 기말고사 수학 시험 범위가 어디까지예요?',
+    category: '교과',
+    status: 'received',
+    assignee: { type: 'teacher', teacherId: 't-kim' },
+    forwardReason: null,
+    answer: null,
+    createdAt: hoursAgo(24 * 8),
   },
 ]
