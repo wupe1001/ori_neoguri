@@ -1,6 +1,8 @@
 // 앱의 모든 경로는 여기서만 정의한다. 링크는 이 상수를 사용한다.
 export const ROUTES = {
   ROOT: '/',
+  // 개발용: 공용 컴포넌트 미리보기
+  UI_PREVIEW: '/ui',
 
   STUDENT: {
     HOME: '/student',

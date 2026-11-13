@@ -5,6 +5,7 @@ import TeacherLayout from './layouts/TeacherLayout'
 
 import RoleSelectPage from './pages/RoleSelectPage'
 import NotFoundPage from './pages/NotFoundPage'
+import UiPreviewPage from './pages/UiPreviewPage'
 
 import StudentHomePage from './pages/student/StudentHomePage'
 import AskPage from './pages/student/AskPage'
@@ -45,6 +46,9 @@ export default function App() {
           <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="settings" element={<TeacherSettingsPage />} />
         </Route>
+
+        {/* 개발용: 공용 컴포넌트 미리보기 */}
+        <Route path="ui" element={<UiPreviewPage />} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
