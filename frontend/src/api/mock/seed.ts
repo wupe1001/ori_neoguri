@@ -36,6 +36,7 @@ export const SEED_NOTICES: Notice[] = [
   {
     id: 'n-1',
     title: '체험학습 신청 안내',
+    senderName: '교무부',
     body: '교외 체험학습은 출발 7일 전까지 신청서를 앱으로 제출해 주세요. 종이 신청서는 받지 않습니다.',
     target: [
       { grade: 2, classNo: 3 },
@@ -46,6 +47,7 @@ export const SEED_NOTICES: Notice[] = [
   {
     id: 'n-2',
     title: '2학기 기말고사 일정',
+    senderName: '교무부',
     body: '기말고사는 12월 8일(화)부터 12월 11일(금)까지입니다. 시험 범위는 과목별 공지를 확인하세요.',
     target: [
       { grade: 2, classNo: 3 },

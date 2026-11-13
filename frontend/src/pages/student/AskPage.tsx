@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router'
 import { askChatbot, refineQuestion, rewriteQuestion, screenQuestion } from '../../api/ai'
 import { submitQuestion } from '../../api/questions'
 import { useStudent } from '../../session/session'
@@ -16,12 +17,15 @@ import WriteStep from './ask/WriteStep'
 // 쓰기 → 검사(위기·욕설) → 챗봇 답 또는 육하원칙 정리 → "이렇게 보낼까요?" → 전송
 export default function AskPage() {
   const student = useStudent()
+  // 공지 화면의 "이 공지 챗봇에게 묻기"에서 오면 공지 제목이 미리 채워진다
+  const location = useLocation()
+  const initialText = (location.state as { initialText?: string } | null)?.initialText ?? ''
 
   const [step, setStep] = useState<AskStep>('write')
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initialText)
   const [isAnonymous, setIsAnonymous] = useState(true)
   const [blockedReason, setBlockedReason] = useState<string | null>(null)
   const [chatbotReply, setChatbotReply] = useState<ChatbotReply | null>(null)

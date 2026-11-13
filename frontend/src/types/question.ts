@@ -77,6 +77,7 @@ export type Notice = {
   id: string
   title: string
   body: string
+  senderName: string // 보낸 교사 또는 부서
   target: ClassRef[] // 받는 반
   sentAt: string
 }
