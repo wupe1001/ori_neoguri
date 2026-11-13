@@ -1,0 +1,13 @@
+{
+  "teachers": [
+    { "loginId": "teacher01", "password": "replace-me" },
+    { "loginId": "teacher02", "password": "replace-me" }
+  ],
+  "students": [
+    { "loginId": "student01", "password": "replace-me", "homeroomTeacherLoginId": "teacher01" }
+  ],
+  "subjects": [
+    { "name": "국어", "teacherLoginId": "teacher01" },
+    { "name": "수학", "teacherLoginId": "teacher02" }
+  ]
+}

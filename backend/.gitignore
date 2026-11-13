@@ -1,0 +1,7 @@
+node_modules
+.env
+swagger-output.json
+data/
+db/seed.json
+postman
+SPECIFICATION.md
