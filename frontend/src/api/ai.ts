@@ -84,7 +84,7 @@ function keywords(text: string) {
 
 const score = (words: string[], target: string) => words.filter((w) => target.includes(w)).length
 
-// 답 근거 저장소(보낸 공지 + 승인된 답)에서 질문과 많이 겹치는 자료를 근거로 찾는다
+// 답 근거 저장소(보낸 공지 + 승인된 답 + 수업 자료)에서 질문과 많이 겹치는 자료를 근거로 찾는다
 function findSources(text: string): Source[] {
   const words = keywords(text)
   if (words.length === 0) return []
@@ -102,7 +102,12 @@ function findSources(text: string): Source[] {
       score: score(words, `${q.originalText} ${q.rewrittenText}`),
     }))
 
-  return [...fromAnswers, ...fromNotices]
+  const fromMaterials = db.materials.map((m) => ({
+    source: { type: 'material' as const, title: m.title, excerpt: m.body },
+    score: score(words, `${m.title} ${m.body}`),
+  }))
+
+  return [...fromAnswers, ...fromNotices, ...fromMaterials]
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score) // 같은 점수면 승인된 답이 먼저
     .slice(0, 3)
@@ -117,7 +122,10 @@ export async function askChatbot(text: string): Promise<ChatbotReply> {
   const sources = findSources(text)
   if (sources.length === 0) return { answer: null, sources: [] }
   const top = sources[0]
-  const lead = top.type === 'approved_answer' ? '비슷한 질문에 선생님이 이렇게 답했어요.' : `'${top.title}' 공지에 따르면,`
+  const lead =
+    top.type === 'approved_answer'
+      ? '비슷한 질문에 선생님이 이렇게 답했어요.'
+      : `'${top.title}' ${top.type === 'material' ? '수업 자료' : '공지'}에 따르면,`
   return { answer: `${lead} ${top.excerpt}`, sources }
 }
 

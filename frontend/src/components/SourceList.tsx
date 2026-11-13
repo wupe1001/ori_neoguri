@@ -4,6 +4,7 @@ const typeLabel: Record<Source['type'], string> = {
   notice: '공지',
   approved_answer: '승인된 답',
   schedule: '학사일정',
+  material: '수업 자료',
 }
 
 // 답의 출처 목록

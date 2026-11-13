@@ -1,4 +1,4 @@
-import type { CrisisAlert, Notice, Question } from '../../types/question'
+import type { CrisisAlert, Material, Notice, Question } from '../../types/question'
 import { SEED_NOTICES, SEED_QUESTIONS } from './seed'
 
 // 목업 저장소: localStorage에 저장해서 학생 탭에서 보낸 질문이 교사 탭에도 보이게 한다.
@@ -8,6 +8,7 @@ type Db = {
   questions: Question[]
   notices: Notice[]
   crisisAlerts: CrisisAlert[]
+  materials: Material[]
 }
 
 function seed(): Db {
@@ -15,6 +16,7 @@ function seed(): Db {
     questions: structuredClone(SEED_QUESTIONS),
     notices: structuredClone(SEED_NOTICES),
     crisisAlerts: [],
+    materials: [],
   }
 }
 

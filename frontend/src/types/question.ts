@@ -18,7 +18,7 @@ export type FiveW1H = {
 
 // 답의 근거 자료
 export type Source = {
-  type: 'notice' | 'approved_answer' | 'schedule'
+  type: 'notice' | 'approved_answer' | 'schedule' | 'material'
   title: string
   excerpt: string
 }
@@ -92,5 +92,14 @@ export type CrisisAlert = {
   author: ClassRef & { nickname: string | null }
   text: string // 학생이 쓴 내용 (홈에서 바로 요청했으면 빈 문자열)
   handled: boolean // 교사가 확인했는지
+  createdAt: string
+}
+
+// 교사가 올린 수업 자료·루브릭 (답 근거 저장소)
+export type Material = {
+  id: string
+  title: string
+  body: string
+  teacherName: string
   createdAt: string
 }
