@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLocation } from 'react-router'
 import { askChatbot, refineQuestion, rewriteQuestion, screenQuestion } from '../../api/ai'
 import { submitQuestion } from '../../api/questions'
+import { authorLabel } from '../../lib/format'
 import { useStudent } from '../../session/session'
 import type { ChatbotReply, FiveW1H } from '../../types/question'
 import ChatbotStep from './ask/ChatbotStep'
@@ -158,7 +159,7 @@ export default function AskPage() {
         <ConfirmStep
           rewrittenText={rewrittenText}
           isAnonymous={isAnonymous}
-          authorLabel={`${student.grade}학년 ${student.classNo}반 ${isAnonymous ? '학생' : student.nickname}`}
+          authorLabel={authorLabel({ ...student, nickname: isAnonymous ? null : student.nickname })}
           sending={sending}
           onSend={handleSend}
           onBack={() => goTo('refine')}

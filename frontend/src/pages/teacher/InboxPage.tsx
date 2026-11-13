@@ -76,7 +76,7 @@ export default function InboxPage() {
               box === b ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted',
             )}
           >
-            {b === 'mine' ? '내 질문함' : `${teacher.department} 질문함`}
+            {b === 'mine' ? '내 질문함' : `${teacher.department ?? '부서'} 질문함`}
           </button>
         ))}
       </div>

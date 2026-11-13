@@ -8,6 +8,7 @@ import type {
   Source,
 } from '../types/question'
 import type { Department, Student } from '../types/user'
+import { authorLabel } from '../lib/format'
 import { delay, readDb } from './mock/db'
 
 // AI가 하는 일들의 목업. 실제로는 백엔드가 AI를 호출한 결과를 돌려준다.
@@ -34,9 +35,8 @@ export async function screenQuestion(text: string): Promise<ScreenResult> {
 // 익명이면 "2학년 3반 학생 (익명)", 아니면 "2학년 3반 오리"
 export async function refineQuestion(text: string, author: Student, isAnonymous: boolean): Promise<FiveW1H> {
   await delay(800)
-  const classLabel = `${author.grade}학년 ${author.classNo}반`
   return {
-    who: isAnonymous ? `${classLabel} 학생 (익명)` : `${classLabel} ${author.nickname}`,
+    who: authorLabel({ ...author, nickname: isAnonymous ? null : author.nickname }),
     when: null,
     where: null,
     what: text.replace(/[?？]\s*$/, ''),

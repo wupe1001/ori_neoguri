@@ -5,7 +5,7 @@ import { getMyQuestions, subscribeQuestions } from '../../api/questions'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
 import Loading from '../../components/Loading'
-import { timeAgo } from '../../lib/format'
+import { classLabel, timeAgo } from '../../lib/format'
 import { getSeenAnswerIds } from '../../lib/seenAnswers'
 import { ROUTES } from '../../routes'
 import { useStudent } from '../../session/session'
@@ -39,9 +39,7 @@ export default function StudentHomePage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <p className="text-caption text-muted">
-          {student.grade}학년 {student.classNo}반
-        </p>
+        {classLabel(student) && <p className="text-caption text-muted">{classLabel(student)}</p>}
         <h1>{student.nickname}님, 안녕하세요</h1>
       </div>
 

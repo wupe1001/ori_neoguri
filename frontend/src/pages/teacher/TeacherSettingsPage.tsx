@@ -14,7 +14,7 @@ export default function TeacherSettingsPage() {
         <ul className="mt-1 text-caption text-muted">
           <li>담당 과목: {teacher.subjects.length ? teacher.subjects.join(', ') : '없음'}</li>
           <li>담임: {teacher.homeroom ? `${teacher.homeroom.grade}학년 ${teacher.homeroom.classNo}반` : '없음'}</li>
-          <li>부서: {teacher.department}</li>
+          <li>부서: {teacher.department ?? '없음'}</li>
         </ul>
       </Card>
       <Button variant="secondary" fullWidth onClick={signOut}>

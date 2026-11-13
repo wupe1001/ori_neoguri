@@ -1,7 +1,7 @@
 export type Department = '교무부' | '학생부' | '행정실' | '상담실'
 
 export type ClassRef = {
-  grade: number // 학년
+  grade: number // 학년 (0이면 모름: 실제 백엔드는 학년·반을 주지 않는다)
   classNo: number // 반
 }
 
@@ -17,7 +17,7 @@ export type Teacher = {
   name: string
   subjects: string[] // 담당 과목
   homeroom: ClassRef | null // 담임 반
-  department: Department // 소속 부서
+  department: Department | null // 소속 부서 (실제 백엔드는 부서 정보를 주지 않는다)
 }
 
 export type Session =

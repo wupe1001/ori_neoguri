@@ -55,7 +55,7 @@ export default function TeacherHomePage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <p className="text-caption text-muted">{teacher.department}</p>
+        {teacher.department && <p className="text-caption text-muted">{teacher.department}</p>}
         <h1>{teacher.name} 선생님, 안녕하세요</h1>
       </div>
 

@@ -1,8 +1,33 @@
-import type { Student, Teacher } from '../types/user'
+import type { Session, Student, Teacher } from '../types/user'
+import { post, USE_MOCK } from './client'
 import { delay } from './mock/db'
 import { CLASS_CODES, TEACHER_CODES } from './mock/seed'
 
-// TODO(백엔드): POST /api/auth/student 로 교체
+// ─── 실제 백엔드: 아이디 + 비밀번호 (세션 쿠키) ───
+
+type LoginResponse = { userId: number; role: 'STUDENT' | 'TEACHER' }
+
+// POST /api/auth/login
+// 백엔드는 이름·학년·반·부서를 주지 않으므로 아이디를 이름 대신 쓰고 나머지는 비워 둔다.
+export async function login(loginId: string, password: string): Promise<Session> {
+  const id = loginId.trim()
+  const res = await post<LoginResponse>('/api/auth/login', { loginId: id, password })
+  if (res.role === 'STUDENT') {
+    return { role: 'student', user: { id: String(res.userId), nickname: id, grade: 0, classNo: 0 } }
+  }
+  return {
+    role: 'teacher',
+    user: { id: String(res.userId), name: id, subjects: [], homeroom: null, department: null },
+  }
+}
+
+// POST /api/auth/logout (실패해도 화면에서는 나간 것으로 처리)
+export async function logout(): Promise<void> {
+  if (USE_MOCK) return
+  await post('/api/auth/logout').catch(() => undefined)
+}
+
+// ─── 목업: 회원가입 없이 코드로 입장 ───
 
 // 학생 입장: 닉네임 + 반 코드
 export async function enterAsStudent(nickname: string, classCode: string): Promise<Student> {
@@ -14,8 +39,6 @@ export async function enterAsStudent(nickname: string, classCode: string): Promi
   // 같은 반 + 같은 닉네임이면 같은 학생으로 본다
   return { id: `s-${classRef.grade}-${classRef.classNo}-${name}`, nickname: name, ...classRef }
 }
-
-// TODO(백엔드): POST /api/auth/teacher 로 교체
 
 // 교사 입장: 교사 코드
 export async function enterAsTeacher(teacherCode: string): Promise<Teacher> {
