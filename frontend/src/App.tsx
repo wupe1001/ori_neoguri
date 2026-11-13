@@ -2,8 +2,9 @@ import { BrowserRouter, Route, Routes } from 'react-router'
 
 import StudentLayout from './layouts/StudentLayout'
 import TeacherLayout from './layouts/TeacherLayout'
+import RequireRole from './session/RequireRole'
 
-import RoleSelectPage from './pages/RoleSelectPage'
+import EntryPage from './pages/EntryPage'
 import NotFoundPage from './pages/NotFoundPage'
 import UiPreviewPage from './pages/UiPreviewPage'
 
@@ -26,9 +27,16 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<RoleSelectPage />} />
+        <Route path="/" element={<EntryPage />} />
 
-        <Route path="student" element={<StudentLayout />}>
+        <Route
+          path="student"
+          element={
+            <RequireRole role="student">
+              <StudentLayout />
+            </RequireRole>
+          }
+        >
           <Route index element={<StudentHomePage />} />
           <Route path="ask" element={<AskPage />} />
           <Route path="questions" element={<MyQuestionsPage />} />
@@ -37,7 +45,14 @@ export default function App() {
           <Route path="settings" element={<StudentSettingsPage />} />
         </Route>
 
-        <Route path="teacher" element={<TeacherLayout />}>
+        <Route
+          path="teacher"
+          element={
+            <RequireRole role="teacher">
+              <TeacherLayout />
+            </RequireRole>
+          }
+        >
           <Route index element={<TeacherHomePage />} />
           <Route path="inbox" element={<InboxPage />} />
           <Route path="inbox/:id" element={<InboxDetailPage />} />
