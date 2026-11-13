@@ -6,7 +6,7 @@ import type {
   ScreenResult,
   Source,
 } from '../types/question'
-import type { ClassRef } from '../types/user'
+import type { Student } from '../types/user'
 import { delay, readDb } from './mock/db'
 
 // AI가 하는 일들의 목업. 실제로는 백엔드가 AI를 호출한 결과를 돌려준다.
@@ -30,10 +30,12 @@ export async function screenQuestion(text: string): Promise<ScreenResult> {
 // TODO(백엔드): POST /api/ai/refine
 
 // 육하원칙으로 정리. 알 수 없는 칸은 null (학생이 채움)
-export async function refineQuestion(text: string, author: ClassRef, isAnonymous: boolean): Promise<FiveW1H> {
+// 익명이면 "2학년 3반 학생 (익명)", 아니면 "2학년 3반 오리"
+export async function refineQuestion(text: string, author: Student, isAnonymous: boolean): Promise<FiveW1H> {
   await delay(800)
+  const classLabel = `${author.grade}학년 ${author.classNo}반`
   return {
-    who: `${author.grade}학년 ${author.classNo}반 학생${isAnonymous ? ' (익명)' : ''}`,
+    who: isAnonymous ? `${classLabel} 학생 (익명)` : `${classLabel} ${author.nickname}`,
     when: null,
     where: null,
     what: text.replace(/[?？]\s*$/, ''),
@@ -47,9 +49,14 @@ export async function refineQuestion(text: string, author: ClassRef, isAnonymous
 // 채운 육하원칙으로 질문을 다시 쓴다 ("이렇게 보낼까요?")
 export async function rewriteQuestion(original: string, f: FiveW1H): Promise<string> {
   await delay(800)
-  const context = [f.when, f.where, f.why].filter(Boolean).join(', ')
-  const how = f.how ? ` ${f.how}(으)로 하면 되나요?` : ''
-  return `${context ? `${context} 상황입니다. ` : ''}${f.what ?? original}에 대해 알고 싶어요.${how}`
+  const question = original.trim().replace(/[?？.]*$/, '?')
+  const parts = [
+    (f.when || f.where) && `${[f.when, f.where].filter(Boolean).join(', ')} 관련 질문이에요.`,
+    f.why && `${f.why} 때문에 여쭤봐요.`,
+    question,
+    f.how && `${f.how}(으)로 하면 되는지도 궁금해요.`,
+  ]
+  return parts.filter(Boolean).join(' ')
 }
 
 // TODO(백엔드): 분류는 질문 전송 시 백엔드에서 처리
