@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { getQuestion, subscribeQuestions } from '../../api/questions'
+import { getStudentQuestion, subscribeQuestions } from '../../api/questions'
 import Card from '../../components/Card'
 import Loading from '../../components/Loading'
 import SourceList from '../../components/SourceList'
 import StatusSteps from '../../components/StatusSteps'
-import { authorLabel, forwardedLabel, timeAgo } from '../../lib/format'
+import { answerAuthor, authorLabel, classLabel, forwardedLabel, timeAgo } from '../../lib/format'
 import { markAnswerSeen } from '../../lib/seenAnswers'
 import { ROUTES } from '../../routes'
 import { useStudent } from '../../session/session'
@@ -23,11 +23,9 @@ export default function QuestionDetailPage() {
   useEffect(() => {
     let cancelled = false
     const load = () =>
-      getQuestion(id)
+      getStudentQuestion(id, student.id)
         .then((q) => {
           if (cancelled) return
-          // 다른 학생의 질문은 보여주지 않는다
-          if (q.studentId !== student.id) throw new Error('질문을 찾을 수 없어요.')
           // 답을 봤으면 홈의 "새로 온 답"에서 뺀다
           if (q.answer) markAnswerSeen(student.id, q.id)
           setQuestion(q)
@@ -60,6 +58,9 @@ export default function QuestionDetailPage() {
 
       <Card>
         <StatusSteps status={question.status} />
+        {question.note && (
+          <p className="mt-3 rounded-lg bg-page px-3 py-2 text-caption text-muted">{question.note}</p>
+        )}
         {forwarded && (
           <p className="mt-3 rounded-lg bg-warning-soft px-3 py-2 text-caption text-warning">
             {forwarded}. 담당 부서에서 답해 줄 거예요.
@@ -70,12 +71,15 @@ export default function QuestionDetailPage() {
       <Card title="보낸 질문">
         <p>{question.rewrittenText}</p>
         <p className="mt-2 text-caption text-muted">
-          {authorLabel(question.author)}(으)로 보냄 · {timeAgo(question.createdAt)}
+          {/* 실제 백엔드는 학년·반을 주지 않아서 보낸 이름은 생략한다 */}
+          {classLabel(question.author) && `${authorLabel(question.author)}(으)로 보냄 · `}
+          {question.subjectName && `${question.subjectName} · `}
+          {timeAgo(question.createdAt)}
         </p>
       </Card>
 
       {question.answer ? (
-        <Card title={`${question.answer.teacherName} 선생님의 답`} className="border-success bg-success-soft">
+        <Card title={`${answerAuthor(question.answer)}의 답`} className="border-success bg-success-soft">
           <p className="whitespace-pre-line">{question.answer.text}</p>
           <SourceList sources={question.answer.sources} />
           <p className="mt-3 text-caption text-muted">

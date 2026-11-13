@@ -1,29 +1,27 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { getNoticesFor } from '../../../api/notices'
-import { getMyQuestions, subscribeQuestions } from '../../../api/questions'
+import { getUnreadAnswerCount, subscribeQuestions } from '../../../api/questions'
 import Card from '../../../components/Card'
 import { timeAgo } from '../../../lib/format'
-import { getSeenAnswerIds } from '../../../lib/seenAnswers'
 import { ROUTES } from '../../../routes'
 import { useStudent } from '../../../session/session'
-import type { Notice, Question } from '../../../types/question'
+import type { Notice } from '../../../types/question'
 
 // 홈 첫 화면에서 입력창 아래에 보여주는 것들: 새로 온 답, 꼭 볼 공지, 도움이 필요해요
 export default function HomeSections() {
   const student = useStudent()
   const [notices, setNotices] = useState<Notice[] | null>(null)
-  const [newAnswers, setNewAnswers] = useState<Question[]>([])
+  const [unread, setUnread] = useState(0)
 
   // 공지와 아직 안 본 답을 불러오고, 다른 탭(교사)에서 답하면 다시 불러온다
   useEffect(() => {
     let cancelled = false
     const load = async () => {
-      const [noticeList, questions] = await Promise.all([getNoticesFor(student), getMyQuestions(student.id)])
+      const [noticeList, count] = await Promise.all([getNoticesFor(student), getUnreadAnswerCount(student.id)])
       if (cancelled) return
-      const seen = getSeenAnswerIds(student.id)
       setNotices([...noticeList].sort((a, b) => b.sentAt.localeCompare(a.sentAt)).slice(0, 2))
-      setNewAnswers(questions.filter((q) => q.answer && !seen.includes(q.id)))
+      setUnread(count)
     }
     load()
     const unsubscribe = subscribeQuestions(load)
@@ -36,22 +34,14 @@ export default function HomeSections() {
   return (
     <div className="flex flex-col gap-5">
       {/* 새로 온 답 */}
-      {newAnswers.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="font-semibold">
-            새로 온 답 <span className="text-success">{newAnswers.length}</span>
-          </h2>
-          {newAnswers.map((q) => (
-            <Link key={q.id} to={ROUTES.STUDENT.QUESTION_DETAIL(q.id)}>
-              <Card className="border-success transition-colors hover:bg-success-soft">
-                <p className="line-clamp-1 text-caption text-muted">{q.rewrittenText}</p>
-                <p className="mt-1 line-clamp-2">
-                  <b className="text-success">{q.answer?.teacherName} 선생님</b> {q.answer?.text}
-                </p>
-              </Card>
-            </Link>
-          ))}
-        </section>
+      {/* 답 내용은 열어볼 때 읽음 처리되므로, 홈에서는 개수만 알려주고 내 질문으로 보낸다 */}
+      {unread > 0 && (
+        <Link to={ROUTES.STUDENT.QUESTIONS}>
+          <Card className="flex items-center justify-between border-success bg-success-soft">
+            <p className="font-semibold text-success">선생님 답이 {unread}개 왔어요</p>
+            <span className="text-caption text-muted">내 질문에서 보기 →</span>
+          </Card>
+        </Link>
       )}
 
       {/* 꼭 볼 공지 */}

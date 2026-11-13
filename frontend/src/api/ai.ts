@@ -9,6 +9,7 @@ import type {
 } from '../types/question'
 import type { Department, Student } from '../types/user'
 import { authorLabel } from '../lib/format'
+import { USE_MOCK } from './client'
 import { delay, readDb } from './mock/db'
 
 // AI가 하는 일들의 목업. 실제로는 백엔드가 AI를 호출한 결과를 돌려준다.
@@ -140,7 +141,9 @@ export async function askChatbot(text: string): Promise<ChatbotReply> {
 // TODO(백엔드): GET /api/questions/:id/draft
 
 // 교사용 AI 답 초안. 근거가 없으면 text가 빈 문자열 (교사가 직접 작성)
+// 실제 백엔드에는 답 초안 API가 아직 없어서 빈 초안을 준다 (교사가 직접 작성)
 export async function getAnswerDraft(questionText: string): Promise<AnswerDraft> {
+  if (!USE_MOCK) return { text: '', sources: [] }
   await delay(800)
   const sources = findSources(questionText)
   if (sources.length === 0) return { text: '', sources: [] }
@@ -153,7 +156,9 @@ export async function getAnswerDraft(questionText: string): Promise<AnswerDraft>
 // TODO(백엔드): GET /api/questions/:id/similar
 
 // 같은 담당에게 온, 아직 답하지 않은 비슷한 질문 (승인할 때 같은 답을 함께 보낸다)
+// 실제 백엔드에는 비슷한 질문 API가 아직 없다
 export async function findSimilarQuestions(questionId: string): Promise<Question[]> {
+  if (!USE_MOCK) return []
   await delay(300)
   const all = readDb().questions
   const base = all.find((q) => q.id === questionId)

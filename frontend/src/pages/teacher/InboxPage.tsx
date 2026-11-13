@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { getInbox, subscribeQuestions } from '../../api/questions'
+import { USE_MOCK } from '../../api/client'
+import { getInbox, inboxLabels, subscribeQuestions } from '../../api/questions'
 import Card from '../../components/Card'
 import CategoryBadge from '../../components/CategoryBadge'
 import { cn } from '../../components/cn'
@@ -64,7 +65,7 @@ export default function InboxPage() {
     <div className="flex flex-col gap-4">
       <h1>질문함</h1>
 
-      {/* 내 질문함 / 부서 질문함 */}
+      {/* 목업: 내 질문함 / 부서 질문함, 실제 백엔드: 과목 질문함 / 담임 질문함 */}
       <div className="grid grid-cols-2 rounded-full bg-page p-1 text-caption font-semibold">
         {(['mine', 'department'] as const).map((b) => (
           <button
@@ -76,27 +77,29 @@ export default function InboxPage() {
               box === b ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted',
             )}
           >
-            {b === 'mine' ? '내 질문함' : `${teacher.department ?? '부서'} 질문함`}
+            {inboxLabels(teacher)[b]}
           </button>
         ))}
       </div>
 
-      {/* 유형 필터 */}
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
-        {CATEGORIES.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setParam('category', c === '전체' ? null : c)}
-            className={cn(
-              'shrink-0 rounded-full border px-3 py-1 text-caption',
-              category === c ? 'border-primary-600 bg-primary-600 text-white' : 'border-line text-muted',
-            )}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
+      {/* 유형 필터 (실제 백엔드는 과목/담임 구분만 있어서 숨긴다) */}
+      {USE_MOCK && (
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
+          {CATEGORIES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setParam('category', c === '전체' ? null : c)}
+              className={cn(
+                'shrink-0 rounded-full border px-3 py-1 text-caption',
+                category === c ? 'border-primary-600 bg-primary-600 text-white' : 'border-line text-muted',
+              )}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       {questions === null ? (
         <Loading message="질문을 불러오고 있어요…" />
@@ -109,7 +112,11 @@ export default function InboxPage() {
               <Link to={ROUTES.TEACHER.INBOX_DETAIL(q.id)}>
                 <Card className={cn('transition-colors hover:border-primary-200', q.status === 'answered' && 'opacity-60')}>
                   <div className="flex items-center justify-between gap-2">
-                    <CategoryBadge category={q.category} />
+                    <div className="flex items-center gap-2">
+                      <CategoryBadge category={q.category} />
+                      {q.subjectName && <span className="text-caption font-semibold text-primary-700">{q.subjectName}</span>}
+                      {q.unread && <span className="rounded-full bg-danger px-1.5 text-caption font-bold text-white">NEW</span>}
+                    </div>
                     <StatusBadge status={q.status} />
                   </div>
                   <p className="mt-2 line-clamp-2">{q.rewrittenText}</p>

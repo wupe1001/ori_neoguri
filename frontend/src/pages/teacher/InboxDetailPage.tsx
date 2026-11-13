@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { findSimilarQuestions, getAnswerDraft, recommendDepartment } from '../../api/ai'
-import { approveAnswer, forwardQuestion, getQuestion } from '../../api/questions'
+import { approveAnswer, CAN_FORWARD, forwardQuestion, getTeacherQuestion } from '../../api/questions'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
 import Checkbox from '../../components/Checkbox'
@@ -11,7 +11,7 @@ import Loading from '../../components/Loading'
 import SourceList from '../../components/SourceList'
 import StatusBadge from '../../components/StatusBadge'
 import { Input, TextArea } from '../../components/TextField'
-import { authorLabel, timeAgo } from '../../lib/format'
+import { answerAuthor, authorLabel, timeAgo } from '../../lib/format'
 import { ROUTES } from '../../routes'
 import { useTeacher } from '../../session/session'
 import type { AnswerDraft, FiveW1H, Question } from '../../types/question'
@@ -39,6 +39,7 @@ export default function InboxDetailPage() {
   const [mode, setMode] = useState<'answer' | 'forward'>('answer')
   const [saving, setSaving] = useState(false)
   const [justAnswered, setJustAnswered] = useState<number | null>(null) // 함께 답한 질문 수
+  const [actionError, setActionError] = useState<string | null>(null)
   // 아직 답하지 않은 비슷한 질문. 승인하면 선택한 질문에도 같은 답이 간다
   const [similar, setSimilar] = useState<Question[]>([])
   const [alsoIds, setAlsoIds] = useState<string[]>([])
@@ -46,7 +47,7 @@ export default function InboxDetailPage() {
   // 질문을 불러오고, 아직 답하지 않았으면 AI 답 초안과 비슷한 질문도 불러온다
   useEffect(() => {
     let cancelled = false
-    getQuestion(id)
+    getTeacherQuestion(id)
       .then(async (q) => {
         if (cancelled) return
         setQuestion(q)
@@ -72,9 +73,12 @@ export default function InboxDetailPage() {
   const handleApprove = async () => {
     setSaving(true)
     try {
+      setActionError(null)
       setQuestion(await approveAnswer(question.id, teacher, answerText.trim(), draft?.sources ?? [], alsoIds))
       setJustAnswered(alsoIds.length)
       window.scrollTo({ top: 0 })
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '답을 보내지 못했어요. 다시 시도해 주세요.')
     } finally {
       setSaving(false)
     }
@@ -96,6 +100,8 @@ export default function InboxDetailPage() {
         ← 질문함
       </button>
 
+      {actionError && <p className="rounded-xl bg-danger-soft p-3 text-caption text-danger">{actionError}</p>}
+
       {justAnswered !== null && (
         <p className="rounded-xl bg-success-soft p-3 text-caption text-success">
           답을 보냈어요. 학생 화면에 '답변 완료'로 표시돼요.
@@ -107,6 +113,7 @@ export default function InboxDetailPage() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <CategoryBadge category={question.category} />
+          {question.subjectName && <span className="text-caption font-semibold text-primary-700">{question.subjectName}</span>}
           <StatusBadge status={question.status} />
         </div>
         <p className="text-caption text-muted">
@@ -116,19 +123,24 @@ export default function InboxDetailPage() {
 
       <Card title="질문" className="border-primary-200 bg-primary-50">
         <p>{question.rewrittenText}</p>
-        <p className="mt-2 text-caption text-muted">학생이 처음 쓴 질문: {question.originalText}</p>
+        {question.originalText && question.originalText !== question.rewrittenText && (
+          <p className="mt-2 text-caption text-muted">학생이 처음 쓴 질문: {question.originalText}</p>
+        )}
       </Card>
 
-      <Card title="육하원칙으로 정리">
-        <dl className="grid grid-cols-[4rem_1fr] gap-y-1.5">
-          {FIVE_W1H_LABELS.map(([key, label]) => (
-            <div key={key} className="contents">
-              <dt className="text-caption font-semibold text-muted">{label}</dt>
-              <dd className={cn(!question.fiveW1H[key] && 'text-muted')}>{question.fiveW1H[key] ?? '—'}</dd>
-            </div>
-          ))}
-        </dl>
-      </Card>
+      {/* 정보가 충분해서 육하원칙을 거치지 않은 질문은 칸이 모두 비어 있다 */}
+      {Object.values(question.fiveW1H).some(Boolean) && (
+        <Card title="육하원칙으로 정리">
+          <dl className="grid grid-cols-[4rem_1fr] gap-y-1.5">
+            {FIVE_W1H_LABELS.map(([key, label]) => (
+              <div key={key} className="contents">
+                <dt className="text-caption font-semibold text-muted">{label}</dt>
+                <dd className={cn(!question.fiveW1H[key] && 'text-muted')}>{question.fiveW1H[key] ?? '—'}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      )}
 
       {question.forwardReason && (
         <Card title="넘어온 사유" className="border-warning bg-warning-soft">
@@ -138,9 +150,14 @@ export default function InboxDetailPage() {
 
       {/* 답변 완료: 보낸 답 */}
       {question.answer ? (
-        <Card title={`보낸 답 · ${question.answer.teacherName} 선생님`} className="border-success bg-success-soft">
+        <Card title={`보낸 답 · ${answerAuthor(question.answer)}`} className="border-success bg-success-soft">
           <p className="whitespace-pre-line">{question.answer.text}</p>
           <SourceList sources={question.answer.sources} />
+        </Card>
+      ) : question.status === 'answered' ? (
+        // 실제 백엔드는 교사 화면에 보낸 답 내용을 주지 않는다
+        <Card className="border-success bg-success-soft">
+          <p className="font-semibold text-success">이미 답을 보낸 질문이에요</p>
         </Card>
       ) : !draft ? (
         <Loading message="AI가 답 초안을 쓰고 있어요…" />
@@ -154,7 +171,7 @@ export default function InboxDetailPage() {
           onAlsoIdsChange={setAlsoIds}
           saving={saving}
           onApprove={handleApprove}
-          onForward={() => setMode('forward')}
+          onForward={CAN_FORWARD ? () => setMode('forward') : undefined}
         />
       ) : (
         <ForwardPanel
@@ -177,7 +194,8 @@ type AnswerPanelProps = {
   onAlsoIdsChange: (ids: string[]) => void
   saving: boolean
   onApprove: () => void
-  onForward: () => void
+  // 없으면 [다른 부서로 넘기기]를 숨긴다 (실제 백엔드에 아직 없음)
+  onForward?: () => void
 }
 
 // 내 담당이면: AI 초안을 검토하고 고친 뒤 승인
@@ -228,9 +246,11 @@ function AnswerPanel({
       <Button fullWidth disabled={!value.trim() || saving} onClick={onApprove}>
         {saving ? '보내는 중…' : alsoIds.length > 0 ? `승인하고 ${alsoIds.length + 1}명에게 보내기` : '승인하고 보내기'}
       </Button>
-      <Button variant="secondary" fullWidth disabled={saving} onClick={onForward}>
-        내 담당이 아니에요 · 다른 부서로 넘기기
-      </Button>
+      {onForward && (
+        <Button variant="secondary" fullWidth disabled={saving} onClick={onForward}>
+          내 담당이 아니에요 · 다른 부서로 넘기기
+        </Button>
+      )}
     </div>
   )
 }

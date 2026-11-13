@@ -30,6 +30,8 @@ export type Answer = {
   answeredAt: string // ISO 날짜
   // 같은 답을 함께 받은 질문 수 (이 질문 포함). 1이면 혼자 받은 답
   recipients: number
+  // 공지를 근거로 AI가 답했으면 true (실제 백엔드의 NOTICE_ANSWERED)
+  byAi?: boolean
 }
 
 // 담당: 교사 개인 질문함 또는 부서 질문함
@@ -55,6 +57,11 @@ export type Question = {
 
   answer: Answer | null
   createdAt: string // ISO 날짜
+
+  // ─ 실제 백엔드에서만 오는 정보 ─
+  subjectName?: string | null // 배정된 과목 (예: 수학)
+  note?: string | null // 진행 안내 (예: "정보 보완이 필요해요")
+  unread?: boolean // 교사가 아직 열어보지 않은 질문
 }
 
 // 보내기 전 검사 결과

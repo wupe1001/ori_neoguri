@@ -6,7 +6,7 @@ import Card from '../../components/Card'
 import { cn } from '../../components/cn'
 import Loading from '../../components/Loading'
 import StatusBadge from '../../components/StatusBadge'
-import { forwardedLabel, timeAgo } from '../../lib/format'
+import { answerAuthor, forwardedLabel, timeAgo } from '../../lib/format'
 import { ROUTES } from '../../routes'
 import { useStudent } from '../../session/session'
 import type { Question } from '../../types/question'
@@ -90,9 +90,13 @@ export default function MyQuestionsPage() {
                   </div>
                   <p className="mt-2 line-clamp-2">{q.rewrittenText}</p>
                   {forwardedLabel(q) && <p className="mt-2 text-caption text-warning">{forwardedLabel(q)}</p>}
+                  {q.note && <p className="mt-2 text-caption text-muted">{q.note}</p>}
+                  {q.subjectName && q.status !== 'answered' && (
+                    <p className="mt-2 text-caption text-muted">{q.subjectName} 선생님께 전달됨</p>
+                  )}
                   {q.answer && (
                     <p className="mt-2 line-clamp-1 text-caption text-success">
-                      {q.answer.teacherName} 선생님: {q.answer.text}
+                      {answerAuthor(q.answer)}: {q.answer.text}
                     </p>
                   )}
                 </Card>

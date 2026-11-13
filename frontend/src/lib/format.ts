@@ -27,3 +27,9 @@ export function forwardedLabel(q: Question) {
 export function classLabel(c: { grade: number; classNo: number }) {
   return c.grade > 0 ? `${c.grade}학년 ${c.classNo}반` : null
 }
+
+// 답한 사람: "김하늘 선생님" / 이름을 모르면 "선생님" / 공지로 AI가 답했으면 "AI (공지)"
+export function answerAuthor(answer: { teacherName: string; byAi?: boolean }) {
+  if (answer.byAi) return 'AI (공지)'
+  return answer.teacherName ? `${answer.teacherName} 선생님` : '선생님'
+}

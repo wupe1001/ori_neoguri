@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getClusters, getLessonDraft, type QuestionCluster } from '../../api/ai'
+import { USE_MOCK } from '../../api/client'
 import { getClasses } from '../../api/notices'
 import { getInbox, subscribeQuestions } from '../../api/questions'
 import Button from '../../components/Button'
@@ -94,11 +95,14 @@ export default function ClustersPage() {
 
       {/* 반 · 기간 · 유형 */}
       <div className="flex flex-col gap-2">
-        <Chips
-          options={[['all', '전체 반'], ...classes.map((c): [string, string] => [classKey(c), `${c.grade}-${c.classNo}반`])]}
-          value={classFilter}
-          onChange={setClassFilter}
-        />
+        {/* 실제 백엔드는 학년·반을 주지 않아서 반 필터를 숨긴다 */}
+        {USE_MOCK && (
+          <Chips
+            options={[['all', '전체 반'], ...classes.map((c): [string, string] => [classKey(c), `${c.grade}-${c.classNo}반`])]}
+            value={classFilter}
+            onChange={setClassFilter}
+          />
+        )}
         <Chips options={PERIODS} value={period} onChange={setPeriod} />
         <Chips options={CATEGORIES.map((c): [typeof c, string] => [c, c])} value={category} onChange={setCategory} />
       </div>
