@@ -10,6 +10,7 @@ import UiPreviewPage from './pages/UiPreviewPage'
 
 import StudentHomePage from './pages/student/StudentHomePage'
 import AskPage from './pages/student/AskPage'
+import HelpPage from './pages/student/HelpPage'
 import MyQuestionsPage from './pages/student/MyQuestionsPage'
 import QuestionDetailPage from './pages/student/QuestionDetailPage'
 import StudentNoticesPage from './pages/student/StudentNoticesPage'
@@ -39,6 +40,7 @@ export default function App() {
         >
           <Route index element={<StudentHomePage />} />
           <Route path="ask" element={<AskPage />} />
+          <Route path="help" element={<HelpPage />} />
           <Route path="questions" element={<MyQuestionsPage />} />
           <Route path="questions/:id" element={<QuestionDetailPage />} />
           <Route path="notices" element={<StudentNoticesPage />} />

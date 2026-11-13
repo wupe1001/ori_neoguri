@@ -1,4 +1,4 @@
-import type { Notice, Question } from '../../types/question'
+import type { CrisisAlert, Notice, Question } from '../../types/question'
 import { SEED_NOTICES, SEED_QUESTIONS } from './seed'
 
 // 목업 저장소: localStorage에 저장해서 학생 탭에서 보낸 질문이 교사 탭에도 보이게 한다.
@@ -7,16 +7,22 @@ const KEY = 'neoguri-mock-db'
 type Db = {
   questions: Question[]
   notices: Notice[]
+  crisisAlerts: CrisisAlert[]
 }
 
 function seed(): Db {
-  return { questions: structuredClone(SEED_QUESTIONS), notices: structuredClone(SEED_NOTICES) }
+  return {
+    questions: structuredClone(SEED_QUESTIONS),
+    notices: structuredClone(SEED_NOTICES),
+    crisisAlerts: [],
+  }
 }
 
 export function readDb(): Db {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return JSON.parse(raw) as Db
+    // 예전에 저장된 데이터에 새 항목이 없어도 동작하도록 초기값과 합친다
+    if (raw) return { ...seed(), ...(JSON.parse(raw) as Partial<Db>) }
   } catch {
     // 저장소를 못 읽으면 초기 데이터로 시작
   }

@@ -129,7 +129,7 @@ export default function AskPage() {
         />
       )}
 
-      {step === 'crisis' && <CrisisStep isAnonymous={isAnonymous} onBack={restart} />}
+      {step === 'crisis' && <CrisisStep text={text} isAnonymous={isAnonymous} onBack={restart} />}
 
       {step === 'chatbot' && chatbotReply && (
         <ChatbotStep

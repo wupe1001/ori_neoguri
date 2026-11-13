@@ -6,6 +6,7 @@ import Loading from '../../components/Loading'
 import SourceList from '../../components/SourceList'
 import StatusSteps from '../../components/StatusSteps'
 import { authorLabel, forwardedLabel, timeAgo } from '../../lib/format'
+import { markAnswerSeen } from '../../lib/seenAnswers'
 import { ROUTES } from '../../routes'
 import { useStudent } from '../../session/session'
 import type { Question } from '../../types/question'
@@ -27,6 +28,8 @@ export default function QuestionDetailPage() {
           if (cancelled) return
           // 다른 학생의 질문은 보여주지 않는다
           if (q.studentId !== student.id) throw new Error('질문을 찾을 수 없어요.')
+          // 답을 봤으면 홈의 "새로 온 답"에서 뺀다
+          if (q.answer) markAnswerSeen(student.id, q.id)
           setQuestion(q)
         })
         .catch((err: Error) => {

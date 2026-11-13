@@ -106,3 +106,43 @@ export async function recommendDepartment(text: string): Promise<{ department: D
   if (/고민|걱정|친구|힘들/.test(text)) return { department: '상담실', reason: '고민 상담이 필요해 보여요' }
   return { department: '학생부', reason: '학교생활·규정 관련 질문이에요' }
 }
+
+// TODO(백엔드): GET /api/teachers/:id/top-questions
+
+export type TopQuestion = {
+  topic: string // 예: "체험학습 신청"
+  count: number
+  example: string // 대표 질문
+}
+
+const TOPICS: [string, RegExp][] = [
+  ['체험학습 신청', /체험학습/],
+  ['수행평가 기준', /수행|보고서/],
+  ['시험 범위·일정', /시험|기말|중간/],
+  ['급식·교복', /급식|교복/],
+  ['출결', /결석|지각|조퇴|출결/],
+]
+
+// 교사: 많이 나온 질문 TOP 3 (주제별로 묶어서 센다)
+export async function getTopQuestions(questions: { rewrittenText: string }[]): Promise<TopQuestion[]> {
+  await delay(300)
+  return TOPICS.map(([topic, pattern]) => {
+    const matched = questions.filter((q) => pattern.test(q.rewrittenText))
+    return { topic, count: matched.length, example: matched[0]?.rewrittenText ?? '' }
+  })
+    .filter((t) => t.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3)
+}
+
+// TODO(백엔드): GET /api/notices/draft
+
+// 교사: 학사일정·가정통신문으로 만든 오늘의 공지 초안
+export async function getTodayNoticeDraft(): Promise<{ title: string; body: string; basis: string }> {
+  await delay(500)
+  return {
+    title: '기말고사 2주 전 안내',
+    body: '기말고사가 12월 8일(화)에 시작합니다. 과목별 시험 범위는 다음 주 월요일까지 공지할 예정이니, 수행평가 제출 일정과 겹치지 않게 미리 확인해 주세요.',
+    basis: '학사일정: 2학기 기말고사 (12월 8일~11일)',
+  }
+}

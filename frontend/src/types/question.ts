@@ -80,3 +80,14 @@ export type Notice = {
   target: ClassRef[] // 받는 반
   sentAt: string
 }
+
+// 위기 신호 → 담임·상담 선생님께 바로 가는 연결 요청 (질문함·AI 답을 거치지 않는다)
+export type CrisisAlert = {
+  id: string
+  studentId: string
+  // 학생이 이름을 알리지 않기로 했으면 nickname은 null
+  author: ClassRef & { nickname: string | null }
+  text: string // 학생이 쓴 내용 (홈에서 바로 요청했으면 빈 문자열)
+  handled: boolean // 교사가 확인했는지
+  createdAt: string
+}
