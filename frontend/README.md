@@ -1,75 +1,50 @@
-# React + TypeScript + Vite
+# 오리너구리 프론트엔드
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## 프로젝트 소개
 
-Currently, two official plugins are available:
+오리너구리의 학생·교사용 모바일 웹입니다. 학생은 채팅으로 질문하고, 교사는 정리된 질문을 받아 답합니다. 휴대폰 화면에 맞춘 레이아웃 하나를 학생과 교사가 함께 씁니다.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 19, TypeScript, Vite
+- Tailwind CSS v4 (색·글자 크기는 `src/index.css`에서만 정의)
+- React Router v7
 
-## React Compiler
+## 주요 기능
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 학생 화면
+- **홈 (채팅 질문하기)**: AI와 대화하며 질문을 4단계로 다듬고 선생님께 보냅니다. 사진도 붙일 수 있습니다.
+- **내 질문**: 보낸 질문의 진행 상태와 선생님 답변을 확인합니다.
+- **공지**: 학교·반 공지를 봅니다.
 
-## Expanding the ESLint configuration
+### 교사 화면
+- **홈 (질문함)**: 위기 알림, 답할 질문 수, 과목·담임 질문함을 한 화면에서 봅니다.
+- **질문 상세**: AI 답 초안을 검토하고 고쳐서 답합니다.
+- **질문 묶음**: 비슷한 질문을 모아 보고 한 번에 답합니다.
+- **공지 / 저장소**: 공지를 쓰고, 승인된 답과 수업 자료를 관리합니다.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 목업 모드
+백엔드 없이도 브라우저에 저장된 시연 데이터로 모든 화면을 쓸 수 있습니다. 탭 하나는 학생, 다른 탭은 교사로 열면 보낸 질문이 서로 바로 반영됩니다.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 실행 방법
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```powershell
+Copy-Item .env.example .env.local
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+http://localhost:5173 에서 열립니다.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| 환경 변수 | 설명 |
+| --- | --- |
+| `VITE_API_MODE` | `real`: 실제 백엔드 사용 / `mock`: 목업으로 시연 |
+| `API_PROXY_TARGET` | `/api` 요청을 넘겨줄 백엔드 주소 (기본 `http://localhost:3000`) |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+실제 백엔드를 쓰려면 먼저 [backend](../backend/README.md)를 실행해 주세요.
 
-```
+**목업 시연용 입장 코드**
+- 학생: 반 코드 `DUCK23` 또는 `DUCK24`와 닉네임
+- 교사: `KIM23` 또는 `LEE24`
+
+**그 밖의 명령**
+- `npm run build`: 타입 검사 후 배포용 빌드
+- `npm run lint`: 코드 검사
