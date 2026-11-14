@@ -1,8 +1,9 @@
-import type { Answer, FiveW1H, Question, QuestionCategory, QuestionStatus } from '../../types/question'
+import type { Answer, Attachment, ImprovementTrail, Question, QuestionCategory, QuestionStatus } from '../../types/question'
 import { toSources } from '../ask'
 import type {
   BackendAnswer,
-  BackendDetails,
+  BackendAttachment,
+  BackendImprovement,
   BackendQuestionStatus,
   RouteType,
   StudentQuestionDetail,
@@ -13,8 +14,6 @@ import type {
 
 // 백엔드 응답 → 프론트 Question 타입으로 바꾼다.
 // 화면은 목업과 같은 Question만 보므로, 백엔드 모양이 바뀌면 이 파일만 고치면 된다.
-
-const EMPTY: FiveW1H = { who: null, when: null, where: null, what: null, how: null, why: null }
 
 // 백엔드 상태 9가지 → 화면 상태 3가지 (접수 → 전달됨 → 답변 완료)
 // 학생에게 배정(ASSIGNED)은 "선생님께 전달됨", 교사에게는 "답할 질문(접수)"이다.
@@ -28,26 +27,62 @@ function toStatus(s: BackendQuestionStatus, viewer: 'student' | 'teacher'): Ques
 function toNote(s: BackendQuestionStatus): string | null {
   switch (s) {
     case 'PROCESSING':
-    case 'REWRITING':
+    case 'GENERATING_IMPROVEMENT_STAGE_1':
+    case 'GENERATING_IMPROVEMENT_STAGE_2':
+    case 'GENERATING_IMPROVEMENT_STAGE_3':
+    case 'GENERATING_FINAL_QUESTION_SUGGESTION':
       return 'AI가 질문을 처리하고 있어요'
-    case 'NEEDS_DETAILS':
-      return '정보 보완이 필요해요 · 홈에서 다시 질문해 주세요'
-    case 'AWAITING_CONFIRMATION':
-      return '보낼 질문을 확인하지 않았어요 · 홈에서 다시 질문해 주세요'
+    case 'AWAITING_IMPROVEMENT_STAGE_1':
+      return '어디서 막혔는지 알려 줘야 선생님께 보낼 수 있어요'
+    case 'AWAITING_IMPROVEMENT_STAGE_2':
+      return '헷갈렸던 실제 예시를 알려 줘야 선생님께 보낼 수 있어요'
+    case 'AWAITING_FINAL_QUESTION':
+      return '질문 후보 중 하나를 골라 확정해야 선생님께 보낼 수 있어요'
     case 'NEEDS_SUBJECT_SELECTION':
-      return '과목을 고르지 않았어요 · 홈에서 다시 질문해 주세요'
+      return '과목을 골라 줘야 선생님께 보낼 수 있어요'
     case 'PROCESSING_FAILED':
-      return 'AI 처리에 실패했어요 · 홈에서 다시 질문해 주세요'
+      return 'AI 처리에 실패했어요. 다시 시도해 주세요'
     default:
       return null
   }
 }
 
-// 과목 질문함 → 교과, 담임 질문함(고민·위기 포함) → 생활
-const toCategory = (r: RouteType | null): QuestionCategory => (r === 'SUBJECT' ? '교과' : '생활')
+// 학생이 이어서 해야 하는 상태 (내 질문에서 [이어서 하기])
+const RESUMABLE = new Set<BackendQuestionStatus>([
+  'AWAITING_IMPROVEMENT_STAGE_1',
+  'AWAITING_IMPROVEMENT_STAGE_2',
+  'AWAITING_FINAL_QUESTION',
+  'NEEDS_SUBJECT_SELECTION',
+  'PROCESSING_FAILED',
+])
 
-const toFiveW1H = (d: BackendDetails | null): FiveW1H =>
-  d ? { who: d.who, when: d.when, where: d.where, what: d.what, how: d.how, why: d.why } : EMPTY
+// 백엔드는 위기 감지에 걸린 질문만 담임에게 보낸다 (question-pipeline.js의 assignHomeroom).
+// 그래서 routeType이 HOMEROOM이면 고민·위기 질문으로 본다.
+const isCrisis = (r: RouteType | null) => r === 'HOMEROOM'
+
+// 과목 질문함 → 교과, 담임 질문함 → 고민, 아직 배정 전 → 생활
+const toCategory = (r: RouteType | null): QuestionCategory => (r === 'SUBJECT' ? '교과' : r === 'HOMEROOM' ? '고민' : '생활')
+
+// 질문 개선 기록 → 막힌 곳 · 실제 사례 · 최종 질문
+const toTrail = (i: BackendImprovement | null): ImprovementTrail | null =>
+  i && (i.stage1.studentAnswer || i.stage4.finalQuestion)
+    ? {
+        stuckPrompt: i.stage1.prompt,
+        stuck: i.stage1.studentAnswer,
+        examplePrompt: i.stage2.prompt,
+        example: i.stage2.studentAnswer,
+        finalQuestion: i.stage4.finalQuestion,
+      }
+    : null
+
+const toAttachments = (list: BackendAttachment[] | undefined): Attachment[] =>
+  (list ?? []).map((f) => ({
+    id: String(f.id),
+    name: f.originalName,
+    mimeType: f.mimeType,
+    size: f.sizeBytes,
+    url: f.downloadUrl,
+  }))
 
 function toAnswer(a: BackendAnswer | null, status: BackendQuestionStatus): Answer | null {
   if (!a) return null
@@ -58,6 +93,7 @@ function toAnswer(a: BackendAnswer | null, status: BackendQuestionStatus): Answe
     answeredAt: a.createdAt,
     recipients: 1,
     byAi: status === 'NOTICE_ANSWERED' || a.authorType !== 'TEACHER',
+    attachments: toAttachments(a.attachments),
   }
 }
 
@@ -69,7 +105,6 @@ function base(id: number, studentId: string, nickname: string | null, createdAt:
     isAnonymous: false,
     author: { grade: 0, classNo: 0, nickname },
     originalText: '',
-    fiveW1H: EMPTY,
     rewrittenText: '',
     category: '생활',
     status: 'received',
@@ -87,9 +122,13 @@ export function fromStudentItem(q: StudentQuestionItem, studentId: string): Ques
     originalText: q.content,
     rewrittenText: q.content,
     category: toCategory(q.routeType),
+    crisis: isCrisis(q.routeType),
+    noticeAnswered: q.status === 'NOTICE_ANSWERED',
     status: toStatus(q.status, 'student'),
     subjectName: q.subject?.name ?? null,
     note: toNote(q.status),
+    resumable: RESUMABLE.has(q.status),
+    attachmentCount: q.attachmentCount ?? 0,
   }
 }
 
@@ -99,12 +138,16 @@ export function fromStudentDetail(q: StudentQuestionDetail, studentId: string): 
     ...base(q.id, studentId, null, q.createdAt),
     originalText: q.originalContent,
     rewrittenText: q.finalContent,
-    fiveW1H: toFiveW1H(q.details),
+    improvement: toTrail(q.improvement),
     category: toCategory(q.routeType),
+    crisis: isCrisis(q.routeType),
+    noticeAnswered: q.status === 'NOTICE_ANSWERED',
     status: toStatus(q.status, 'student'),
     answer: toAnswer(q.answer, q.status),
+    attachments: toAttachments(q.attachments),
     subjectName: q.subject?.name ?? null,
     note: toNote(q.status),
+    resumable: RESUMABLE.has(q.status),
   }
 }
 
@@ -115,9 +158,12 @@ export function fromTeacherItem(q: TeacherQuestionItem): Question {
     originalText: q.content,
     rewrittenText: q.content,
     category: toCategory(q.routeType),
+    crisis: isCrisis(q.routeType),
+    noticeAnswered: q.status === 'NOTICE_ANSWERED',
     status: toStatus(q.status, 'teacher'),
     subjectName: q.subject?.name ?? null,
     unread: q.teacherReadAt === null,
+    attachmentCount: q.attachmentCount ?? 0,
   }
 }
 
@@ -127,9 +173,12 @@ export function fromTeacherDetail(q: TeacherQuestionDetail): Question {
     ...base(q.id, String(q.studentId), `학생 #${q.studentId}`, q.createdAt),
     originalText: q.originalContent,
     rewrittenText: q.finalContent,
-    fiveW1H: toFiveW1H(q.details),
+    improvement: toTrail(q.improvement),
     category: toCategory(q.routeType),
+    crisis: isCrisis(q.routeType),
+    noticeAnswered: q.status === 'NOTICE_ANSWERED',
     status: toStatus(q.status, 'teacher'),
     subjectName: q.subject?.name ?? null,
+    attachments: toAttachments(q.attachments),
   }
 }

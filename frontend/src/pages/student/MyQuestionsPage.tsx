@@ -43,7 +43,7 @@ export default function MyQuestionsPage() {
     <div className="flex flex-col gap-4">
       <h1>내 질문</h1>
 
-      <div className="grid grid-cols-2 rounded-full bg-page p-1 text-caption font-semibold">
+      <div className="grid grid-cols-2 rounded-full bg-track p-1 text-caption font-semibold">
         {(
           [
             ['ongoing', `진행 중 ${ongoing.length}`],
@@ -56,7 +56,7 @@ export default function MyQuestionsPage() {
             onClick={() => setFilter(value)}
             className={cn(
               'rounded-full py-2 transition-colors',
-              filter === value ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted',
+              filter === value ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted hover:text-ink',
             )}
           >
             {label}
@@ -85,14 +85,24 @@ export default function MyQuestionsPage() {
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-caption text-muted">{timeAgo(q.createdAt)}</span>
+                    <span className="text-caption text-muted">
+                      {timeAgo(q.createdAt)}
+                      {!!q.attachmentCount && ` · 사진 ${q.attachmentCount}장`}
+                    </span>
                     <StatusBadge status={q.status} />
                   </div>
                   <p className="mt-2 line-clamp-2">{q.rewrittenText}</p>
                   {forwardedLabel(q) && <p className="mt-2 text-caption text-warning">{forwardedLabel(q)}</p>}
-                  {q.note && <p className="mt-2 text-caption text-muted">{q.note}</p>}
-                  {q.subjectName && q.status !== 'answered' && (
-                    <p className="mt-2 text-caption text-muted">{q.subjectName} 선생님께 전달됨</p>
+                  {q.note && (
+                    <p className={cn('mt-2 text-caption', q.resumable ? 'font-semibold text-primary-700' : 'text-muted')}>
+                      {q.note}
+                      {q.resumable && ' →'}
+                    </p>
+                  )}
+                  {(q.subjectName || q.crisis) && q.status !== 'answered' && (
+                    <p className="mt-2 text-caption text-muted">
+                      {q.crisis ? '담임' : q.subjectName} 선생님께 전달됨
+                    </p>
                   )}
                   {q.answer && (
                     <p className="mt-2 line-clamp-1 text-caption text-success">

@@ -6,13 +6,16 @@ import { getInbox, subscribeQuestions } from '../../api/questions'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
 import Loading from '../../components/Loading'
+import InboxSection from './InboxSection'
 import { timeAgo } from '../../lib/format'
 import { ROUTES } from '../../routes'
 import { useTeacher } from '../../session/session'
-import type { CrisisAlert } from '../../types/question'
+import { authorLabel } from '../../lib/format'
+import type { CrisisAlert, Question } from '../../types/question'
 
 type HomeData = {
-  crisis: CrisisAlert[]
+  crisis: CrisisAlert[] // 목업: 학생이 보낸 상담 연결 요청
+  crisisQuestions: Question[] // 실제 백엔드: 아직 답하지 않은 고민·위기 질문 (담임 배정)
   toAnswer: number // 오늘 답할 질문 수 (내 질문함 + 부서 질문함의 미답변)
   top: TopQuestion[]
   noticeDraft: Awaited<ReturnType<typeof getTodayNoticeDraft>>
@@ -35,7 +38,13 @@ export default function TeacherHomePage() {
       const all = [...mine, ...dept]
       const top = await getTopQuestions(all)
       if (cancelled) return
-      setData({ crisis, toAnswer: all.filter((q) => q.status !== 'answered').length, top, noticeDraft })
+      setData({
+        crisis,
+        crisisQuestions: dept.filter((q) => q.crisis && q.status !== 'answered'),
+        toAnswer: all.filter((q) => q.status !== 'answered').length,
+        top,
+        noticeDraft,
+      })
     }
     load()
     const unsubscribe = subscribeQuestions(load)
@@ -54,16 +63,32 @@ export default function TeacherHomePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        {teacher.department && <p className="text-caption text-muted">{teacher.department}</p>}
-        <h1>{teacher.name} 선생님, 안녕하세요</h1>
+      {/* 인사말: 연한 노랑→주황 그라데이션 */}
+      <div className="relative overflow-hidden rounded-[24px] bg-linear-to-br from-sun-50 via-sun-100 to-primary-100 px-5 py-6 text-ink">
+        <div className="pointer-events-none absolute -top-14 -right-10 size-40 rounded-full bg-sun-200/60 blur-2xl" />
+        <p className="relative text-caption font-semibold text-primary-700">{teacher.department ?? '오리너구리 교사용'}</p>
+        <h1 className="relative mt-1 text-ink">{teacher.name} 선생님, 안녕하세요</h1>
+        <p className="relative mt-1 text-caption text-ink/70">학생들이 막힌 곳을 정리해서 보내 줬어요</p>
       </div>
 
       {/* 위기 알림: 맨 위 고정 */}
+      {data.crisisQuestions.map((q) => (
+        <Link key={q.id} to={ROUTES.TEACHER.INBOX_DETAIL(q.id)}>
+          <Card className="border-danger/30 bg-linear-to-br from-danger-soft via-danger-soft/70 to-warning-soft">
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-semibold text-danger">고민, 위기신호 · 직접 연락이 필요해요</p>
+              <span className="shrink-0 text-caption text-muted">{timeAgo(q.createdAt)}</span>
+            </div>
+            <p className="mt-1 text-caption text-ink">{authorLabel(q.author)}</p>
+            <p className="mt-2 line-clamp-2 rounded-lg bg-surface p-2">{q.rewrittenText}</p>
+            <p className="mt-2 text-caption text-muted">AI가 고민, 위기신호를 감지해 담임 선생님께 바로 보낸 질문이에요. 눌러서 확인해 주세요.</p>
+          </Card>
+        </Link>
+      ))}
       {data.crisis.map((alert) => (
-        <Card key={alert.id} className="border-danger bg-danger-soft">
+        <Card key={alert.id} className="border-danger/30 bg-linear-to-br from-danger-soft via-danger-soft/70 to-warning-soft">
           <div className="flex items-center justify-between gap-2">
-            <p className="font-semibold text-danger">위기 신호 · 직접 연락이 필요해요</p>
+            <p className="font-semibold text-danger">고민, 위기신호 · 직접 연락이 필요해요</p>
             <span className="shrink-0 text-caption text-muted">{timeAgo(alert.createdAt)}</span>
           </div>
           <p className="mt-1 text-caption text-ink">
@@ -79,15 +104,13 @@ export default function TeacherHomePage() {
       ))}
 
       {/* 오늘 답할 질문 */}
-      <Link to={ROUTES.TEACHER.INBOX}>
-        <Card className="flex items-center justify-between transition-colors hover:border-primary-200">
-          <div>
-            <p className="text-caption text-muted">답할 질문</p>
-            <p className="text-title font-bold text-primary-700">{data.toAnswer}개</p>
-          </div>
-          <span className="text-caption text-muted">질문함 열기 →</span>
-        </Card>
-      </Link>
+      <Card>
+        <p className="text-caption text-muted">답할 질문</p>
+        <p className="text-title font-bold text-primary-700">{data.toAnswer}개</p>
+      </Card>
+
+      {/* 질문함: 답할 질문 카드 바로 아래 */}
+      <InboxSection />
 
       {/* AI 오늘 공지 초안 (실제 백엔드는 아직 없어서 숨긴다) */}
       {data.noticeDraft && (

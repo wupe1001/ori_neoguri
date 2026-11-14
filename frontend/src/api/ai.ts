@@ -1,14 +1,13 @@
 import type {
   AnswerDraft,
   ChatbotReply,
-  FiveW1H,
   Question,
+  QuestionCandidate,
   QuestionCategory,
   ScreenResult,
   Source,
 } from '../types/question'
-import type { Department, Student } from '../types/user'
-import { authorLabel } from '../lib/format'
+import type { Department } from '../types/user'
 import { USE_MOCK } from './client'
 import { delay, readDb } from './mock/db'
 
@@ -30,35 +29,51 @@ export async function screenQuestion(text: string): Promise<ScreenResult> {
   return { kind: 'ok' }
 }
 
-// TODO(백엔드): POST /api/ai/refine
+// ─── 질문 개선 4단계 목업: 막힌 곳 → 실제 사례 → 질문 후보 → 학생이 고르고 고치기 ───
+// 실제 백엔드에서는 AI가 질문 내용을 보고 문구를 만든다. 목업은 틀에 맞춰 흉내만 낸다.
 
-// 육하원칙으로 정리. 알 수 없는 칸은 null (학생이 채움)
-// 익명이면 "2학년 3반 학생 (익명)", 아니면 "2학년 3반 오리"
-export async function refineQuestion(text: string, author: Student, isAnonymous: boolean): Promise<FiveW1H> {
-  await delay(800)
+// 1단계: 어디서 막혔는지 묻는다
+export async function improvementStuck(text: string): Promise<{ prompt: string; examples: string[] }> {
+  await delay(700)
+  const topic = text.replace(/[?？.!]+$/, '').trim()
   return {
-    who: authorLabel({ ...author, nickname: isAnonymous ? null : author.nickname }),
-    when: null,
-    where: null,
-    what: text.replace(/[?？]\s*$/, ''),
-    how: null,
-    why: null,
+    prompt: `'${topic}'에서 특히 어떤 부분이 막혔나요? 지금까지 이해한 내용과 함께, 막힌 지점을 자유롭게 말해 주세요.`,
+    examples: [
+      '개념은 대충 알겠는데 문제에 적용하는 게 어려워요.',
+      '비슷한 두 가지가 어떻게 다른지 헷갈려요.',
+      '설명은 들었는데 왜 그렇게 되는지 이해가 안 돼요.',
+      '언제까지, 어떻게 해야 하는지 정확히 모르겠어요.',
+    ],
   }
 }
 
-// TODO(백엔드): POST /api/ai/rewrite
+// 2단계: 실제 사례를 묻는다
+export async function improvementExample(stuck: string): Promise<string> {
+  await delay(700)
+  return `'${stuck.replace(/[.。]+$/, '')}'라고 했죠. 실제로 헷갈렸던 문장이나 문제 하나를 그대로 적고, 왜 헷갈렸는지 짧게 알려 주세요.`
+}
 
-// 채운 육하원칙으로 질문을 다시 쓴다 ("이렇게 보낼까요?")
-export async function rewriteQuestion(original: string, f: FiveW1H): Promise<string> {
-  await delay(800)
-  const question = original.trim().replace(/[?？.]*$/, '?')
-  const parts = [
-    (f.when || f.where) && `${[f.when, f.where].filter(Boolean).join(', ')} 관련 질문이에요.`,
-    f.why && `${f.why} 때문에 여쭤봐요.`,
-    question,
-    f.how && `${f.how}(으)로 하면 되는지도 궁금해요.`,
-  ]
-  return parts.filter(Boolean).join(' ')
+// 3단계: 서로 다른 깊이의 질문 후보를 만든다
+export async function improvementCandidates(
+  text: string,
+  stuck: string,
+  example: string,
+): Promise<{ prompt: string; candidates: QuestionCandidate[] }> {
+  await delay(900)
+  const topic = text.replace(/[?？.!]+$/, '').trim()
+  return {
+    prompt: [
+      '후보 질문을 읽어 보고 마음에 드는 것 하나를 고른 뒤, 내 상황에 맞게 고쳐 보세요.',
+      '- 헷갈린 실제 예시를 넣기',
+      '- 어디서 막혔는지 한 문장으로 쓰기',
+      '원하면 후보를 완전히 바꿔도 좋아요!',
+    ].join('\n'),
+    candidates: [
+      { id: 'mock-1', question: `${example} 이 부분에서 무엇을 기준으로 판단하면 되나요?`, type: '비교/선택 기준 질문', level: '이해' },
+      { id: 'mock-2', question: `${topic}에서 '${stuck}' 부분을 예시와 함께 다시 설명해 주세요.`, type: '개념 이해 질문', level: '이해' },
+      { id: 'mock-3', question: `${topic} 문제를 풀 때 먼저 확인해야 할 순서를 알려 주세요.`, type: '전략 수립 질문', level: '적용' },
+    ],
+  }
 }
 
 // TODO(백엔드): 분류는 질문 전송 시 백엔드에서 처리

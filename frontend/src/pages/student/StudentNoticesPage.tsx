@@ -50,7 +50,7 @@ export default function StudentNoticesPage() {
 
       {/* 자주 묻는 질문은 실제 백엔드에 아직 없어서 목업에서만 보여준다 */}
       {HAS_FAQ && (
-        <div className="grid grid-cols-2 rounded-full bg-page p-1 text-caption font-semibold">
+        <div className="grid grid-cols-2 rounded-full bg-track p-1 text-caption font-semibold">
           {(
             [
               ['notices', '받은 공지'],
@@ -63,7 +63,7 @@ export default function StudentNoticesPage() {
               onClick={() => setTab(value)}
               className={cn(
                 'rounded-full py-2 transition-colors',
-                tab === value ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted',
+                tab === value ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted hover:text-ink',
               )}
             >
               {label}

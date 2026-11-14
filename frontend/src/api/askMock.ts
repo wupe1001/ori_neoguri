@@ -1,15 +1,15 @@
-import type { FiveW1H } from '../types/question'
+import type { ImprovementTrail } from '../types/question'
 import type { Student } from '../types/user'
-import { askChatbot, refineQuestion, rewriteQuestion, screenQuestion } from './ai'
+import { askChatbot, improvementCandidates, improvementExample, improvementStuck, screenQuestion } from './ai'
 import type { AskEngine, AskResult } from './askEngine'
 import { newId } from './mock/db'
 import { submitQuestion } from './questions'
 
 // 목업 질문하기 엔진: 실제 백엔드와 같은 흐름을 브라우저 안에서 흉내 낸다.
-// 검사(위기·욕설) → 공지·승인된 답으로 답 → 없으면 육하원칙 정리 → 다시 쓰기 → 담임 선생님께 전송
+// 검사(위기·욕설) → 공지·승인된 답으로 답 → 없으면 질문 개선 4단계 → 담임 선생님께 전송
 export function createMockAskEngine(student: Student): AskEngine {
   // 보내기 전 질문은 이 탭의 메모리에만 둔다
-  const drafts = new Map<string, { text: string; isAnonymous: boolean; fiveW1H: FiveW1H | null }>()
+  const drafts = new Map<string, { text: string; isAnonymous: boolean; trail: ImprovementTrail }>()
 
   const draft = (id: string) => {
     const d = drafts.get(id)
@@ -17,14 +17,15 @@ export function createMockAskEngine(student: Student): AskEngine {
     return d
   }
 
-  const refine = async (id: string): Promise<AskResult> => {
+  // 1단계로 들어간다
+  const startImprovement = async (id: string): Promise<AskResult> => {
     const d = draft(id)
-    const prefill = await refineQuestion(d.text, student, d.isAnonymous)
-    return { kind: 'needs_details', questionId: id, prefill, askedAgain: false }
+    const { prompt, examples } = await improvementStuck(d.text)
+    d.trail.stuckPrompt = prompt
+    return { kind: 'stuck', questionId: id, prompt, examples }
   }
 
   return {
-    requireAllDetails: false,
     supportsAnonymous: true,
 
     submit: async (text, isAnonymous) => {
@@ -33,29 +34,50 @@ export function createMockAskEngine(student: Student): AskEngine {
       if (screen.kind === 'blocked') return { kind: 'blocked', reason: screen.reason }
 
       const id = newId('draft')
-      drafts.set(id, { text, isAnonymous, fiveW1H: null })
+      drafts.set(id, {
+        text,
+        isAnonymous,
+        trail: { stuckPrompt: null, stuck: null, examplePrompt: null, example: null, finalQuestion: null },
+      })
       const reply = await askChatbot(text)
       if (reply.answer) {
         return { kind: 'notice_answered', questionId: id, answer: reply.answer, sources: reply.sources, canEscalate: true }
       }
-      return refine(id)
+      return startImprovement(id)
     },
 
-    escalate: refine,
+    escalate: startImprovement,
 
-    details: async (id, f) => {
+    answerStuck: async (id, answer) => {
       const d = draft(id)
-      d.fiveW1H = f
-      return { kind: 'confirm', questionId: id, rewritten: await rewriteQuestion(d.text, f) }
+      d.trail.stuck = answer
+      const prompt = await improvementExample(answer)
+      d.trail.examplePrompt = prompt
+      return { kind: 'example', questionId: id, prompt }
     },
 
-    confirm: async (id, content) => {
+    answerExample: async (id, answer) => {
       const d = draft(id)
+      d.trail.example = answer
+      const { prompt, candidates } = await improvementCandidates(d.text, d.trail.stuck ?? '', answer)
+      return { kind: 'pick', questionId: id, prompt, candidates }
+    },
+
+    // 건너뛰기: 원래 질문과 지금까지 답한 내용을 이어 붙여 질문 하나로 만든다
+    skipToFinal: async (id) => {
+      const d = draft(id)
+      const parts = [d.text.replace(/[?？.!]+$/, ''), d.trail.stuck, d.trail.example].filter(Boolean)
+      return { kind: 'suggested', questionId: id, suggestion: `${parts.join(' / ')} 이 부분을 알려 주세요.` }
+    },
+
+    finalize: async (id, content) => {
+      const d = draft(id)
+      d.trail.finalQuestion = content
       const question = await submitQuestion({
         student,
         isAnonymous: d.isAnonymous,
         originalText: d.text,
-        fiveW1H: d.fiveW1H ?? { who: null, when: null, where: null, what: null, how: null, why: null },
+        improvement: d.trail,
         rewrittenText: content,
       })
       drafts.delete(id)

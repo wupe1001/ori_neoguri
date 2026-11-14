@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => {
       proxy: env.API_PROXY_TARGET
         ? { '/api': { target: env.API_PROXY_TARGET, changeOrigin: true } }
         : undefined,
+
+      host: '0.0.0.0',
+      port: 5173,
     },
   }
 })

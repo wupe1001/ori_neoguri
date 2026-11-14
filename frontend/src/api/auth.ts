@@ -1,23 +1,23 @@
 import type { Session, Student, Teacher } from '../types/user'
+import type { LoginResponse } from './backend/types'
 import { post, USE_MOCK } from './client'
 import { delay } from './mock/db'
 import { CLASS_CODES, TEACHER_CODES } from './mock/seed'
 
 // ─── 실제 백엔드: 아이디 + 비밀번호 (세션 쿠키) ───
 
-type LoginResponse = { userId: number; role: 'STUDENT' | 'TEACHER' }
-
 // POST /api/auth/login
-// 백엔드는 이름·학년·반·부서를 주지 않으므로 아이디를 이름 대신 쓰고 나머지는 비워 둔다.
+// 닉네임을 이름으로 쓴다. 백엔드는 학년·반·부서를 주지 않으므로 비워 둔다.
 export async function login(loginId: string, password: string): Promise<Session> {
   const id = loginId.trim()
   const res = await post<LoginResponse>('/api/auth/login', { loginId: id, password })
+  const name = res.nickname || id
   if (res.role === 'STUDENT') {
-    return { role: 'student', user: { id: String(res.userId), nickname: id, grade: 0, classNo: 0 } }
+    return { role: 'student', user: { id: String(res.userId), nickname: name, grade: 0, classNo: 0 } }
   }
   return {
     role: 'teacher',
-    user: { id: String(res.userId), name: id, subjects: [], homeroom: null, department: null },
+    user: { id: String(res.userId), name, subjects: [], homeroom: null, department: null },
   }
 }
 

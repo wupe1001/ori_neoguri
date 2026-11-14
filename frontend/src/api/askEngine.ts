@@ -1,14 +1,21 @@
-import type { FiveW1H, Source } from '../types/question'
+import type { QuestionCandidate, Source } from '../types/question'
 import type { Subject } from './backend/types'
 
 // 채팅 질문하기가 쓰는 "대화 엔진".
 // 실제 백엔드(ask.ts)와 목업(askMock.ts)이 같은 모양으로 답해서, 채팅 화면은 하나만 있으면 된다.
+//
+// 정보가 부족한 질문은 4단계로 다듬는다:
+//   1. 막힌 곳 찾기 (stuck) → 2. 구체화하기 (example) → 3. 질문 틀 보여주기 (pick) → 4. 학생이 고르고 고치기
 
 export type AskResult =
-  // 육하원칙을 채워 달라고 한다. prefill은 미리 채워 둘 값 (AI가 정리했거나 전에 쓴 값)
-  | { kind: 'needs_details'; questionId: string; prefill: FiveW1H; askedAgain: boolean }
-  // AI가 다시 쓴 질문 → "이렇게 보낼까요?"
-  | { kind: 'confirm'; questionId: string; rewritten: string }
+  // 1단계: 어디서 막혔는지 묻는다. examples는 학생이 참고할 예시 답변
+  | { kind: 'stuck'; questionId: string; prompt: string; examples: string[] }
+  // 2단계: 실제로 헷갈렸던 문장·문제를 묻는다
+  | { kind: 'example'; questionId: string; prompt: string }
+  // 3단계: 질문 후보를 보여주고, 학생이 하나를 골라 고친 뒤 확정한다
+  | { kind: 'pick'; questionId: string; prompt: string; candidates: QuestionCandidate[] }
+  // 건너뛰기: 지금까지 답한 내용으로 AI가 만든 질문 하나. 학생이 고쳐서 확정한다
+  | { kind: 'suggested'; questionId: string; suggestion: string }
   // AI가 과목을 못 정해서 학생이 고른다
   | { kind: 'needs_subject'; questionId: string }
   // 선생님께 보냄. 고민·위기 신호로 담임에게 바로 갔으면 crisisMessage가 있다
@@ -25,16 +32,20 @@ export type AskResult =
   | { kind: 'other'; questionId: string }
 
 export type AskEngine = {
-  // 육하원칙 여섯 칸을 모두 채워야 하는지 (실제 백엔드는 필수)
-  requireAllDetails: boolean
   // 익명 질문을 지원하는지 (실제 백엔드는 아직 미지원)
   supportsAnonymous: boolean
-  submit: (text: string, isAnonymous: boolean) => Promise<AskResult>
-  details: (questionId: string, f: FiveW1H) => Promise<AskResult>
-  confirm: (questionId: string, content: string) => Promise<AskResult>
+  // files: 질문에 붙인 사진 (처음 보낼 때만 올릴 수 있다)
+  submit: (text: string, isAnonymous: boolean, files?: File[]) => Promise<AskResult>
+  answerStuck: (questionId: string, answer: string) => Promise<AskResult> // 1단계 답
+  answerExample: (questionId: string, answer: string) => Promise<AskResult> // 2단계 답
+  // 1·2단계에서 남은 단계를 건너뛰고 AI가 최종 질문 하나를 만든다
+  skipToFinal: (questionId: string) => Promise<AskResult>
+  finalize: (questionId: string, content: string) => Promise<AskResult> // 최종 질문 확정
   chooseSubject: (questionId: string, subjectId: number) => Promise<AskResult>
   retry: (questionId: string) => Promise<AskResult>
   // 공지 답을 받은 뒤 선생님께 넘기기 (지원할 때만)
   escalate?: (questionId: string) => Promise<AskResult>
+  // 중간에 멈춘 질문을 지금 상태부터 이어서 하기 (지원할 때만)
+  resume?: (questionId: string) => Promise<{ question: string; result: AskResult }>
   getSubjects: () => Promise<Subject[]>
 }

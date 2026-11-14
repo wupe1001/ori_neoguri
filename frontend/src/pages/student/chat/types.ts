@@ -8,6 +8,6 @@ export type AiContent =
   | { kind: 'error'; message: string }
 
 export type ChatItem =
-  | { id: string; role: 'user'; text: string }
+  | { id: string; role: 'user'; text: string; files?: File[] } // files: 함께 보낸 사진
   // active: 아직 학생이 답해야 하는 말풍선 (버튼·입력칸이 살아 있다)
   | { id: string; role: 'ai'; content: AiContent; active: boolean }

@@ -4,6 +4,8 @@ import { findSimilarQuestions, getAnswerDraft, recommendDepartment } from '../..
 import { approveAnswer, CAN_FORWARD, forwardQuestion, getTeacherQuestion } from '../../api/questions'
 import Button from '../../components/Button'
 import Card from '../../components/Card'
+import { AttachmentList, PhotoButton, PickedPhotos } from '../../components/Attachments'
+import { addImages } from '../../lib/attachments'
 import Checkbox from '../../components/Checkbox'
 import CategoryBadge from '../../components/CategoryBadge'
 import { cn } from '../../components/cn'
@@ -14,17 +16,9 @@ import { Input, TextArea } from '../../components/TextField'
 import { answerAuthor, authorLabel, timeAgo } from '../../lib/format'
 import { ROUTES } from '../../routes'
 import { useTeacher } from '../../session/session'
-import type { AnswerDraft, FiveW1H, Question } from '../../types/question'
+import type { AnswerDraft, Question } from '../../types/question'
 import type { Department } from '../../types/user'
 
-const FIVE_W1H_LABELS: [keyof FiveW1H, string][] = [
-  ['who', '누가'],
-  ['when', '언제'],
-  ['where', '어디서'],
-  ['what', '무엇을'],
-  ['how', '어떻게'],
-  ['why', '왜'],
-]
 const DEPARTMENTS: Department[] = ['교무부', '학생부', '행정실', '상담실']
 
 export default function InboxDetailPage() {
@@ -36,6 +30,7 @@ export default function InboxDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [draft, setDraft] = useState<AnswerDraft | null>(null)
   const [answerText, setAnswerText] = useState('')
+  const [answerPhotos, setAnswerPhotos] = useState<File[]>([]) // 답에 붙일 사진
   const [mode, setMode] = useState<'answer' | 'forward'>('answer')
   const [saving, setSaving] = useState(false)
   const [justAnswered, setJustAnswered] = useState<number | null>(null) // 함께 답한 질문 수
@@ -74,7 +69,10 @@ export default function InboxDetailPage() {
     setSaving(true)
     try {
       setActionError(null)
-      setQuestion(await approveAnswer(question.id, teacher, answerText.trim(), draft?.sources ?? [], alsoIds))
+      setQuestion(
+        await approveAnswer(question.id, teacher, answerText.trim(), draft?.sources ?? [], alsoIds, answerPhotos),
+      )
+      setAnswerPhotos([])
       setJustAnswered(alsoIds.length)
       window.scrollTo({ top: 0 })
     } catch (err) {
@@ -88,7 +86,7 @@ export default function InboxDetailPage() {
     setSaving(true)
     try {
       await forwardQuestion(question.id, department, reason)
-      navigate(ROUTES.TEACHER.INBOX, { replace: true })
+      navigate(ROUTES.TEACHER.HOME, { replace: true })
     } finally {
       setSaving(false)
     }
@@ -96,7 +94,7 @@ export default function InboxDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <button type="button" onClick={() => navigate(-1)} className="self-start text-caption text-muted">
+      <button type="button" onClick={() => navigate(-1)} className="self-start text-caption text-muted hover:text-ink">
         ← 질문함
       </button>
 
@@ -107,6 +105,16 @@ export default function InboxDetailPage() {
           답을 보냈어요. 학생 화면에 '답변 완료'로 표시돼요.
           {justAnswered > 0 && ` 비슷한 질문 ${justAnswered}개에도 같은 답을 함께 보냈어요.`}
         </p>
+      )}
+
+      {/* 고민·위기 신호로 담임에게 바로 온 질문 */}
+      {question.crisis && question.status !== 'answered' && (
+        <Card className="border-danger/30 bg-linear-to-br from-danger-soft via-danger-soft/70 to-warning-soft">
+          <p className="font-semibold text-danger">고민, 위기신호가 감지된 질문이에요</p>
+          <p className="mt-1 text-caption text-ink">
+            AI 답 추천 없이 담임 선생님께 바로 전달됐어요. 답을 보내는 것과 함께 학생에게 직접 연락해 주세요.
+          </p>
+        </Card>
       )}
 
       {/* 질문 정보 */}
@@ -126,19 +134,31 @@ export default function InboxDetailPage() {
         {question.originalText && question.originalText !== question.rewrittenText && (
           <p className="mt-2 text-caption text-muted">학생이 처음 쓴 질문: {question.originalText}</p>
         )}
+        <AttachmentList items={question.attachments} className="mt-3" />
       </Card>
 
-      {/* 정보가 충분해서 육하원칙을 거치지 않은 질문은 칸이 모두 비어 있다 */}
-      {Object.values(question.fiveW1H).some(Boolean) && (
-        <Card title="육하원칙으로 정리">
-          <dl className="grid grid-cols-[4rem_1fr] gap-y-1.5">
-            {FIVE_W1H_LABELS.map(([key, label]) => (
-              <div key={key} className="contents">
-                <dt className="text-caption font-semibold text-muted">{label}</dt>
-                <dd className={cn(!question.fiveW1H[key] && 'text-muted')}>{question.fiveW1H[key] ?? '—'}</dd>
-              </div>
-            ))}
-          </dl>
+      {/* 학생이 질문을 다듬은 과정: 어디서 막혔고, 어떤 예시에서 헷갈렸는지 (정보가 충분했던 질문은 없음) */}
+      {question.improvement && (
+        <Card title="학생이 질문을 다듬은 과정">
+          <ol className="flex flex-col gap-3">
+            {[
+              { step: '막힌 곳', ask: question.improvement.stuckPrompt, answer: question.improvement.stuck },
+              { step: '실제 예시', ask: question.improvement.examplePrompt, answer: question.improvement.example },
+            ]
+              .filter((s) => s.answer)
+              .map((s, i) => (
+                <li key={s.step} className="flex gap-2">
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-100 text-caption font-bold text-primary-700">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-caption font-semibold text-muted">{s.step}</p>
+                    {s.ask && <p className="line-clamp-2 text-caption text-muted">AI: {s.ask}</p>}
+                    <p className="mt-0.5">{s.answer}</p>
+                  </div>
+                </li>
+              ))}
+          </ol>
         </Card>
       )}
 
@@ -152,6 +172,7 @@ export default function InboxDetailPage() {
       {question.answer ? (
         <Card title={`보낸 답 · ${answerAuthor(question.answer)}`} className="border-success bg-success-soft">
           <p className="whitespace-pre-line">{question.answer.text}</p>
+          <AttachmentList items={question.answer.attachments} className="mt-3" />
           <SourceList sources={question.answer.sources} />
         </Card>
       ) : question.status === 'answered' ? (
@@ -166,6 +187,8 @@ export default function InboxDetailPage() {
           draft={draft}
           value={answerText}
           onChange={setAnswerText}
+          photos={answerPhotos}
+          onPhotosChange={setAnswerPhotos}
           similar={similar}
           alsoIds={alsoIds}
           onAlsoIdsChange={setAlsoIds}
@@ -189,6 +212,8 @@ type AnswerPanelProps = {
   draft: AnswerDraft
   value: string
   onChange: (value: string) => void
+  photos: File[]
+  onPhotosChange: (files: File[]) => void
   similar: Question[]
   alsoIds: string[]
   onAlsoIdsChange: (ids: string[]) => void
@@ -203,6 +228,8 @@ function AnswerPanel({
   draft,
   value,
   onChange,
+  photos,
+  onPhotosChange,
   similar,
   alsoIds,
   onAlsoIdsChange,
@@ -210,6 +237,7 @@ function AnswerPanel({
   onApprove,
   onForward,
 }: AnswerPanelProps) {
+  const [photoError, setPhotoError] = useState<string | null>(null)
   const toggle = (qid: string) =>
     onAlsoIdsChange(alsoIds.includes(qid) ? alsoIds.filter((x) => x !== qid) : [...alsoIds, qid])
 
@@ -222,6 +250,28 @@ function AnswerPanel({
         onChange={(e) => onChange(e.target.value)}
         rows={6}
       />
+      {/* 답에 붙일 사진 (풀이 사진 등) */}
+      <div className="flex flex-col gap-1">
+        <PickedPhotos
+          files={photos}
+          onRemove={(i) => {
+            onPhotosChange(photos.filter((_, j) => j !== i))
+            setPhotoError(null)
+          }}
+        />
+        <div className="flex items-center gap-1 text-caption text-muted">
+          <PhotoButton
+            disabled={saving}
+            onPick={(picked) => {
+              const { files, error } = addImages(photos, picked)
+              onPhotosChange(files)
+              setPhotoError(error)
+            }}
+          />
+          {photos.length > 0 ? `사진 ${photos.length}장을 함께 보내요` : '사진 붙이기'}
+        </div>
+        {photoError && <p className="text-caption text-danger">{photoError}</p>}
+      </div>
       {draft.sources.length > 0 && (
         <Card>
           <SourceList sources={draft.sources} />
@@ -296,7 +346,7 @@ function ForwardPanel({ questionText, saving, onForward, onCancel }: ForwardPane
             onClick={() => setDepartment(d)}
             className={cn(
               'rounded-xl border py-2 text-body',
-              department === d ? 'border-primary-600 bg-primary-50 font-semibold text-primary-700' : 'border-line',
+              department === d ? 'border-primary-600 bg-primary-50 font-semibold text-primary-700' : 'border-line hover:border-primary-200',
             )}
           >
             {d}

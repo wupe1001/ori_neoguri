@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { getStudentQuestion, subscribeQuestions } from '../../api/questions'
+import Button from '../../components/Button'
 import Card from '../../components/Card'
+import { AttachmentList } from '../../components/Attachments'
+import HotlineCard from '../../components/HotlineCard'
 import Loading from '../../components/Loading'
 import SourceList from '../../components/SourceList'
 import StatusSteps from '../../components/StatusSteps'
@@ -51,7 +54,7 @@ export default function QuestionDetailPage() {
       <button
         type="button"
         onClick={() => navigate(ROUTES.STUDENT.QUESTIONS)}
-        className="self-start text-caption text-muted"
+        className="self-start text-caption text-muted hover:text-ink"
       >
         ← 내 질문
       </button>
@@ -60,6 +63,15 @@ export default function QuestionDetailPage() {
         <StatusSteps status={question.status} />
         {question.note && (
           <p className="mt-3 rounded-lg bg-page px-3 py-2 text-caption text-muted">{question.note}</p>
+        )}
+        {question.resumable && (
+          <Button
+            fullWidth
+            className="mt-3"
+            onClick={() => navigate(ROUTES.STUDENT.HOME, { state: { resumeQuestionId: question.id } })}
+          >
+            이어서 하기
+          </Button>
         )}
         {forwarded && (
           <p className="mt-3 rounded-lg bg-warning-soft px-3 py-2 text-caption text-warning">
@@ -70,17 +82,23 @@ export default function QuestionDetailPage() {
 
       <Card title="보낸 질문">
         <p>{question.rewrittenText}</p>
+        <AttachmentList items={question.attachments} className="mt-3" />
         <p className="mt-2 text-caption text-muted">
           {/* 실제 백엔드는 학년·반을 주지 않아서 보낸 이름은 생략한다 */}
           {classLabel(question.author) && `${authorLabel(question.author)}(으)로 보냄 · `}
           {question.subjectName && `${question.subjectName} · `}
+          {question.crisis && '담임 선생님께 전달 · '}
           {timeAgo(question.createdAt)}
         </p>
       </Card>
 
+      {/* 고민·위기 신호로 담임에게 간 질문: 답을 기다리는 동안 바로 연락할 곳을 알려준다 */}
+      {question.crisis && !question.answer && <HotlineCard />}
+
       {question.answer ? (
         <Card title={`${answerAuthor(question.answer)}의 답`} className="border-success bg-success-soft">
           <p className="whitespace-pre-line">{question.answer.text}</p>
+          <AttachmentList items={question.answer.attachments} className="mt-3" />
           <SourceList sources={question.answer.sources} />
           <p className="mt-3 text-caption text-muted">
             {timeAgo(question.answer.answeredAt)}

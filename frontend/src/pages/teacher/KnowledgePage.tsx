@@ -64,7 +64,7 @@ export default function KnowledgePage() {
 
       <Input placeholder="검색 (예: 체험학습)" value={search} onChange={(e) => setSearch(e.target.value)} />
 
-      <div className="grid grid-cols-3 rounded-full bg-page p-1 text-caption font-semibold">
+      <div className="grid grid-cols-3 rounded-full bg-track p-1 text-caption font-semibold">
         {tabs.map(([value, label, count]) => (
           <button
             key={value}
@@ -72,7 +72,7 @@ export default function KnowledgePage() {
             onClick={() => setTab(value)}
             className={cn(
               'rounded-full py-2 transition-colors',
-              tab === value ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted',
+              tab === value ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted hover:text-ink',
             )}
           >
             {label} {count}

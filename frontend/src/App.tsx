@@ -16,7 +16,6 @@ import StudentNoticesPage from './pages/student/StudentNoticesPage'
 import StudentSettingsPage from './pages/student/StudentSettingsPage'
 
 import TeacherHomePage from './pages/teacher/TeacherHomePage'
-import InboxPage from './pages/teacher/InboxPage'
 import InboxDetailPage from './pages/teacher/InboxDetailPage'
 import ClustersPage from './pages/teacher/ClustersPage'
 import TeacherNoticesPage from './pages/teacher/TeacherNoticesPage'
@@ -56,7 +55,8 @@ export default function App() {
           }
         >
           <Route index element={<TeacherHomePage />} />
-          <Route path="inbox" element={<InboxPage />} />
+          {/* 질문함은 홈으로 합쳐졌다. 예전 주소로 오면 홈으로 보낸다 */}
+          <Route path="inbox" element={<Navigate to="/teacher" replace />} />
           <Route path="inbox/:id" element={<InboxDetailPage />} />
           <Route path="clusters" element={<ClustersPage />} />
           <Route path="notices" element={<TeacherNoticesPage />} />

@@ -1,11 +1,11 @@
-import type { FiveW1H, Source } from '../types/question'
+import type { QuestionCandidate, Source } from '../types/question'
 import type { AskEngine, AskResult } from './askEngine'
-import type { PipelineResponse, StudentQuestionDetail, Subject } from './backend/types'
-import { get, post } from './client'
+import type { Candidate, PipelineResponse, StudentQuestionDetail, Subject } from './backend/types'
+import { ApiError, formData, get, post } from './client'
 
 // 실제 백엔드 질문하기 엔진.
-// 질문을 보내면 백엔드 AI가 위기 감지 → 공지로 답하기 → 정보가 충분한지 판단 → 과목 분류를 차례로 하고,
-// 그 결과(status)에 따라 다음 단계가 정해진다.
+// 질문을 보내면 백엔드 AI가 위기 감지 → 공지로 답하기 → 정보가 충분한지 판단 → 과목 분류를 차례로 한다.
+// 정보가 부족하면 질문 개선 4단계(막힌 곳 → 실제 사례 → 질문 후보 → 최종 질문)로 다듬은 뒤 다시 분류한다.
 
 const getDetail = (id: string) => get<StudentQuestionDetail>(`/api/questions/${id}`)
 
@@ -20,22 +20,25 @@ export function toSources(raw: unknown[]): Source[] {
   })
 }
 
-const EMPTY: FiveW1H = { who: null, when: null, where: null, what: null, how: null, why: null }
+export const toCandidates = (list: Candidate[] = []): QuestionCandidate[] =>
+  list.map((c) => ({ id: c.id, question: c.question, type: c.type, level: c.bloomLevel }))
 
 async function toResult(res: PipelineResponse): Promise<AskResult> {
   const questionId = String(res.questionId)
   switch (res.status) {
-    case 'NEEDS_DETAILS': {
-      // 확정한 뒤 다시 보완을 요청받을 수 있어서, 전에 쓴 육하원칙이 있으면 채워 준다
-      const { details } = await getDetail(questionId)
-      if (!details) return { kind: 'needs_details', questionId, prefill: EMPTY, askedAgain: false }
-      const { who, when, where, what, how, why } = details
-      return { kind: 'needs_details', questionId, prefill: { who, when, where, what, how, why }, askedAgain: true }
-    }
-    case 'AWAITING_CONFIRMATION': {
-      const rewritten = res.rewrittenContent ?? (await getDetail(questionId)).rewrittenContent ?? ''
-      return { kind: 'confirm', questionId, rewritten }
-    }
+    case 'AWAITING_IMPROVEMENT_STAGE_1':
+      return { kind: 'stuck', questionId, prompt: res.prompt ?? '어떤 부분에서 막혔나요?', examples: res.exampleAnswers ?? [] }
+    case 'AWAITING_IMPROVEMENT_STAGE_2':
+      return { kind: 'example', questionId, prompt: res.prompt ?? '실제로 헷갈렸던 문장이나 문제를 알려 주세요.' }
+    case 'AWAITING_FINAL_QUESTION':
+      // 건너뛰기 응답이면 추천 질문 하나, 아니면 3단계 후보 목록
+      if (res.suggestedQuestion) return { kind: 'suggested', questionId, suggestion: res.suggestedQuestion }
+      return {
+        kind: 'pick',
+        questionId,
+        prompt: res.prompt ?? '마음에 드는 질문을 골라 고쳐 보세요.',
+        candidates: toCandidates(res.candidates),
+      }
     case 'NEEDS_SUBJECT_SELECTION':
       return { kind: 'needs_subject', questionId }
     case 'ASSIGNED': {
@@ -65,34 +68,84 @@ async function toResult(res: PipelineResponse): Promise<AskResult> {
   }
 }
 
-const call = async (path: string, body?: unknown) => toResult(await post<PipelineResponse>(path, body))
+// AI 처리가 실패하면(503) 백엔드는 질문을 PROCESSING_FAILED로 저장하고 에러에 questionId를 담아 준다.
+// 다시 시도할 수 있는 실패면 에러 대신 'failed' 결과로 바꿔서 채팅에 [다시 시도하기]를 보여준다.
+async function call(path: string, body?: unknown): Promise<AskResult> {
+  try {
+    return await toResult(await post<PipelineResponse>(path, body))
+  } catch (err) {
+    const questionId = err instanceof ApiError ? err.details.questionId : undefined
+    if (err instanceof ApiError && err.status === 503 && questionId != null && err.details.retryable !== false) {
+      return { kind: 'failed', questionId: String(questionId) }
+    }
+    throw err
+  }
+}
+
+// 멈춘 질문의 현재 상태 → 이어서 할 단계 (GET /api/questions/:id)
+async function resume(questionId: string): Promise<{ question: string; result: AskResult }> {
+  const d = await getDetail(questionId)
+  const question = d.originalContent
+  const imp = d.improvement
+  switch (d.status) {
+    case 'AWAITING_IMPROVEMENT_STAGE_1':
+      return {
+        question,
+        result: { kind: 'stuck', questionId, prompt: imp?.stage1.prompt ?? '어떤 부분에서 막혔나요?', examples: imp?.stage1.exampleAnswers ?? [] },
+      }
+    case 'AWAITING_IMPROVEMENT_STAGE_2':
+      return {
+        question,
+        result: { kind: 'example', questionId, prompt: imp?.stage2.prompt ?? '실제로 헷갈렸던 문장이나 문제를 알려 주세요.' },
+      }
+    case 'AWAITING_FINAL_QUESTION':
+      // 건너뛰기로 왔으면 후보 없이 추천 질문만 있다
+      if (imp?.stage4.suggestedQuestion && !imp.stage3.candidates.length) {
+        return { question, result: { kind: 'suggested', questionId, suggestion: imp.stage4.suggestedQuestion } }
+      }
+      return {
+        question,
+        result: {
+          kind: 'pick',
+          questionId,
+          prompt: imp?.stage3.prompt ?? '마음에 드는 질문을 골라 고쳐 보세요.',
+          candidates: toCandidates(imp?.stage3.candidates),
+        },
+      }
+    case 'NEEDS_SUBJECT_SELECTION':
+      return { question, result: { kind: 'needs_subject', questionId } }
+    case 'PROCESSING_FAILED':
+      return { question, result: { kind: 'failed', questionId } }
+    default:
+      return { question, result: { kind: 'other', questionId } }
+  }
+}
 
 export const backendAskEngine: AskEngine = {
-  requireAllDetails: true,
   supportsAnonymous: false,
 
-  // POST /api/questions/
-  submit: (text) => call('/api/questions/', { content: text }),
+  // POST /api/questions/ (multipart/form-data: content, files[])
+  submit: (text, _isAnonymous, files = []) => call('/api/questions/', formData({ content: text }, files)),
 
-  // POST /api/questions/:id/details (여섯 칸 모두 필수)
-  details: (id, f) =>
-    call(`/api/questions/${id}/details`, {
-      who: f.who?.trim() ?? '',
-      when: f.when?.trim() ?? '',
-      where: f.where?.trim() ?? '',
-      what: f.what?.trim() ?? '',
-      how: f.how?.trim() ?? '',
-      why: f.why?.trim() ?? '',
-    }),
+  // POST /api/questions/:id/improvement/stage-1 (막힌 곳)
+  answerStuck: (id, answer) => call(`/api/questions/${id}/improvement/stage-1`, { answer }),
 
-  // POST /api/questions/:id/confirmation
-  confirm: (id, content) => call(`/api/questions/${id}/confirmation`, { content }),
+  // POST /api/questions/:id/improvement/stage-2 (실제 사례)
+  answerExample: (id, answer) => call(`/api/questions/${id}/improvement/stage-2`, { answer }),
+
+  // POST /api/questions/:id/improvement/final-suggestion (남은 단계 건너뛰기 → 추천 질문 하나)
+  skipToFinal: (id) => call(`/api/questions/${id}/improvement/final-suggestion`),
+
+  // POST /api/questions/:id/improvement/final (최종 질문 확정 → 과목 분류·배정)
+  finalize: (id, content) => call(`/api/questions/${id}/improvement/final`, { content }),
 
   // POST /api/questions/:id/subject
   chooseSubject: (id, subjectId) => call(`/api/questions/${id}/subject`, { subjectId }),
 
-  // POST /api/questions/:id/retry
+  // POST /api/questions/:id/retry (실패한 단계부터 다시)
   retry: (id) => call(`/api/questions/${id}/retry`),
+
+  resume,
 
   // GET /api/subjects/
   getSubjects: async () => (await get<{ items: Subject[] }>('/api/subjects/')).items,

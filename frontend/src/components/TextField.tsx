@@ -2,7 +2,7 @@ import { useId, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttri
 import { cn } from './cn'
 
 const fieldClass =
-  'w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-body text-ink placeholder:text-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100'
+  'w-full rounded-2xl border border-line bg-surface px-3.5 py-2.5 text-body text-ink placeholder:text-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100'
 
 type LabelProps = {
   label?: string

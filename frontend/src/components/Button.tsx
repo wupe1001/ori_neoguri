@@ -11,14 +11,14 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 const variantClass: Record<Variant, string> = {
-  primary: 'bg-primary-600 text-white hover:bg-primary-700',
-  secondary: 'border border-primary-600 bg-surface text-primary-700 hover:bg-primary-50',
-  ghost: 'text-muted hover:bg-page',
-  danger: 'bg-danger text-white hover:opacity-90',
+  primary: 'bg-primary-600 text-white shadow-sm shadow-primary-600/25 enabled:hover:bg-primary-700 enabled:hover:shadow-md enabled:hover:shadow-primary-600/30',
+  secondary: 'border border-primary-200 bg-surface text-primary-700 enabled:hover:border-primary-600 enabled:hover:bg-primary-50',
+  ghost: 'text-muted enabled:hover:bg-track/60 enabled:hover:text-ink',
+  danger: 'bg-danger text-white enabled:hover:opacity-90 enabled:hover:shadow-md enabled:hover:shadow-danger/25',
 }
 
 const sizeClass: Record<Size, string> = {
-  md: 'px-4 py-3 text-body',
+  md: 'px-5 py-3 text-body',
   sm: 'px-3 py-1.5 text-caption',
 }
 
@@ -34,7 +34,7 @@ export default function Button({
     <button
       type={type}
       className={cn(
-        'rounded-xl font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+        'rounded-full font-semibold enabled:hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none',
         variantClass[variant],
         sizeClass[size],
         fullWidth && 'w-full',

@@ -23,7 +23,8 @@ function sortQuestions(list: Question[]) {
   )
 }
 
-export default function InboxPage() {
+// 교사 홈 안에 들어가는 질문함 (별도 탭은 없앴다)
+export default function InboxSection() {
   const teacher = useTeacher()
   // 탭·필터는 URL에 둔다 → 상세에서 뒤로 와도 유지된다
   const [params, setParams] = useSearchParams()
@@ -62,11 +63,11 @@ export default function InboxPage() {
   const visible = questions?.filter((q) => category === '전체' || q.category === category) ?? []
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1>질문함</h1>
+    <section className="flex flex-col gap-3">
+      <h2 className="font-semibold">질문함</h2>
 
       {/* 목업: 내 질문함 / 부서 질문함, 실제 백엔드: 과목 질문함 / 담임 질문함 */}
-      <div className="grid grid-cols-2 rounded-full bg-page p-1 text-caption font-semibold">
+      <div className="grid grid-cols-2 rounded-full bg-track p-1 text-caption font-semibold">
         {(['mine', 'department'] as const).map((b) => (
           <button
             key={b}
@@ -74,7 +75,7 @@ export default function InboxPage() {
             onClick={() => changeBox(b)}
             className={cn(
               'rounded-full py-2 transition-colors',
-              box === b ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted',
+              box === b ? 'bg-surface text-primary-700 shadow-sm' : 'text-muted hover:text-ink',
             )}
           >
             {inboxLabels(teacher)[b]}
@@ -92,7 +93,7 @@ export default function InboxPage() {
               onClick={() => setParam('category', c === '전체' ? null : c)}
               className={cn(
                 'shrink-0 rounded-full border px-3 py-1 text-caption',
-                category === c ? 'border-primary-600 bg-primary-600 text-white' : 'border-line text-muted',
+                category === c ? 'border-primary-600 bg-primary-600 text-white' : 'border-line text-muted hover:border-primary-200 hover:text-ink',
               )}
             >
               {c}
@@ -122,6 +123,7 @@ export default function InboxPage() {
                   <p className="mt-2 line-clamp-2">{q.rewrittenText}</p>
                   <p className="mt-2 text-caption text-muted">
                     {authorLabel(q.author)} · {timeAgo(q.createdAt)}
+                    {!!q.attachmentCount && ` · 사진 ${q.attachmentCount}장`}
                   </p>
                 </Card>
               </Link>
@@ -129,6 +131,6 @@ export default function InboxPage() {
           ))}
         </ul>
       )}
-    </div>
+    </section>
   )
 }
