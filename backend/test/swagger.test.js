@@ -7,12 +7,10 @@ const swagger = JSON.parse(readFileSync(new URL('../swagger-output.json', import
 const bodyContracts = [
   ['post', '/api/auth/login', 'LoginRequest', ['loginId', 'password']],
   ['post', '/api/notices/', 'NoticeRequest', ['title', 'content']],
-  ['post', '/api/questions/', 'QuestionRequest', ['content']],
   ['post', '/api/questions/{questionId}/improvement/stage-1', 'ImprovementAnswerRequest', ['answer']],
   ['post', '/api/questions/{questionId}/improvement/stage-2', 'ImprovementAnswerRequest', ['answer']],
   ['post', '/api/questions/{questionId}/improvement/final', 'FinalQuestionRequest', ['content']],
   ['post', '/api/questions/{questionId}/subject', 'SubjectSelectionRequest', ['subjectId']],
-  ['post', '/api/teacher/questions/{questionId}/answer', 'AnswerRequest', ['content']],
 ];
 
 test('Swagger 문서에 모든 JSON 요청 본문과 필수 필드가 포함된다', () => {
@@ -28,6 +26,20 @@ test('Swagger 문서에 모든 JSON 요청 본문과 필수 필드가 포함된�
   }
 });
 
+test('질문과 교사 답변 업로드 API는 multipart 파일 배열을 문서화한다', () => {
+  for (const path of ['/api/questions/', '/api/teacher/questions/{questionId}/answer']) {
+    const operation = swagger.paths[path]?.post;
+    assert.deepEqual(operation.consumes, ['multipart/form-data']);
+    const content = operation.parameters.find((parameter) => parameter.name === 'content');
+    const files = operation.parameters.find((parameter) => parameter.name === 'files');
+    assert.equal(content.in, 'formData');
+    assert.equal(content.required, true);
+    assert.equal(files.in, 'formData');
+    assert.equal(files.type, 'array');
+    assert.equal(files.items.type, 'file');
+  }
+});
+
 test('Swagger 문서에 목록 쿼리와 양의 정수 경로 인자가 포함된다', () => {
   for (const path of ['/api/notices/', '/api/questions/', '/api/teacher/questions/']) {
     const parameters = swagger.paths[path].get.parameters;
@@ -36,7 +48,7 @@ test('Swagger 문서에 목록 쿼리와 양의 정수 경로 인자가 포함�
   }
 
   for (const [path, operations] of Object.entries(swagger.paths)) {
-    if (!path.includes('{questionId}') && !path.includes('{noticeId}')) continue;
+    if (!path.includes('{questionId}') && !path.includes('{noticeId}') && !path.includes('{fileId}')) continue;
     for (const operation of Object.values(operations)) {
       const pathParameter = operation.parameters.find(({ in: location }) => location === 'path');
       assert.equal(pathParameter.type, 'integer', path);

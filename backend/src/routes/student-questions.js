@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { AppError, conflict, notFound } from '../errors.js';
 import { requireRole } from '../middleware/auth.js';
+import { multipartUpload } from '../middleware/multipart-upload.js';
 import { store } from '../repositories/store.js';
+import { attachmentMetadata, prepareAttachments } from '../services/attachment.js';
 import { questionImprovement } from '../services/question-improvement.js';
 import { questionPipeline } from '../services/question-pipeline.js';
 import { nonEmptyString, pageBody, pagination, positiveId } from './helpers.js';
@@ -24,7 +26,7 @@ studentQuestionsRouter.get('/unread-count', (req, res) => {
   res.json({ count: store.studentUnreadCount(req.session.userId) });
 });
 
-studentQuestionsRouter.post('/', async (req, res) => {
+studentQuestionsRouter.post('/', multipartUpload, async (req, res) => {
   /* #swagger.tags = ['Student Questions']
      #swagger.summary = '질문 제출'
      #swagger.description = '학생 질문을 저장한 뒤 위기 감지, 공지 답변, 충분성 판단과 과목 분류 파이프라인을 동기적으로 실행합니다.'
@@ -32,14 +34,20 @@ studentQuestionsRouter.post('/', async (req, res) => {
      #swagger.responses[422] = { description: '질문이 모델 입력 한도를 초과했습니다.' }
      #swagger.responses[503] = { description: '외부 모델 처리에 실패했습니다.' }
   */
-  /* #swagger.parameters['body'] = {
-       in: 'body',
-       required: true,
-       schema: { $ref: '#/definitions/QuestionRequest' }
-  } */
+  /* #swagger.consumes = ['multipart/form-data']
+     #swagger.parameters['content'] = { in: 'formData', required: true, type: 'string' }
+     #swagger.parameters['files'] = { in: 'formData', required: false, type: 'array', items: { type: 'file' }, collectionFormat: 'multi' }
+  */
   const content = nonEmptyString(req.body?.content, 'content', 32000);
   if (content.length > 30000) throw new AppError(422, 'MODEL_INPUT_TOO_LARGE', '질문이 모델 입력 한도를 초과할 수 있습니다.', { maxCharacters: 30000 });
-  const questionId = store.createQuestion(req.session.userId, content);
+  const attachments = prepareAttachments(req.files);
+  let questionId;
+  try {
+    questionId = store.createQuestion(req.session.userId, content, attachments);
+  } catch (error) {
+    if (!attachments.length) throw error;
+    throw new AppError(500, 'ATTACHMENT_STORAGE_FAILED', '첨부파일을 저장하지 못했습니다.');
+  }
   const result = await questionPipeline.run(questionId);
   res.status(201).json(result);
 });
@@ -62,6 +70,7 @@ studentQuestionsRouter.get('/', (req, res) => {
     subject: item.subjectJson ? JSON.parse(item.subjectJson) : null,
     createdAt: item.createdAt,
     hasAnswer: Boolean(item.hasAnswer),
+    attachmentCount: item.attachmentCount,
   }));
   res.json(pageBody(items, store.countStudentQuestions(req.session.userId), page, limit));
 });
@@ -198,7 +207,7 @@ studentQuestionsRouter.get('/:questionId', (req, res) => {
     store.markStudentRead(detail.row.answer_id);
     detail = store.getStudentQuestionDetail(questionId, req.session.userId);
   }
-  const { row, sources } = detail;
+  const { row, sources, questionAttachments, answerAttachments } = detail;
   res.json({
     id: row.id,
     originalContent: row.original_content,
@@ -210,10 +219,12 @@ studentQuestionsRouter.get('/:questionId', (req, res) => {
     retryStatus: row.retry_status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    attachments: questionAttachments.map(attachmentMetadata),
     improvement: store.getImprovement(row.id),
     answer: row.answer_id ? {
       id: row.answer_id, authorType: row.author_type, teacherId: row.answer_teacher_id,
-      content: row.answer_content, studentReadAt: row.student_read_at, createdAt: row.answer_created_at, sources,
+      content: row.answer_content, studentReadAt: row.student_read_at, createdAt: row.answer_created_at,
+      attachments: answerAttachments.map(attachmentMetadata), sources,
     } : null,
   });
 });

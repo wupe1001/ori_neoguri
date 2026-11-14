@@ -15,6 +15,11 @@ function numberSetting(name, { min = 0, max = Number.POSITIVE_INFINITY, integer 
   return value;
 }
 
+function optionalNumberSetting(name, fallback, options) {
+  if (process.env[name] === undefined || process.env[name].trim() === '') return fallback;
+  return numberSetting(name, options);
+}
+
 const cwd = process.cwd();
 
 export const config = Object.freeze({
@@ -28,6 +33,11 @@ export const config = Object.freeze({
   decisionModel: process.env.DECISION_MODEL?.trim() || 'jev-latest',
   generationModel: required('GENERATION_MODEL'),
   modelTimeoutMs: numberSetting('MODEL_TIMEOUT_MS', { min: 1, integer: true }),
+  attachments: Object.freeze({
+    maxCount: optionalNumberSetting('ATTACHMENT_MAX_COUNT', 5, { min: 1, integer: true }),
+    maxFileBytes: optionalNumberSetting('ATTACHMENT_MAX_FILE_BYTES', 10 * 1024 * 1024, { min: 1, integer: true }),
+    maxTotalBytes: optionalNumberSetting('ATTACHMENT_MAX_TOTAL_BYTES', 25 * 1024 * 1024, { min: 1, integer: true }),
+  }),
   thresholds: Object.freeze({
     crisis: numberSetting('CRISIS_CONFIDENCE_THRESHOLD', { min: 0, max: 1 }),
     notice: numberSetting('NOTICE_CONFIDENCE_THRESHOLD', { min: 0, max: 1 }),

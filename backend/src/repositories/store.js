@@ -2,6 +2,24 @@ import { db } from '../db/database.js';
 
 export const now = () => new Date().toISOString();
 
+function insertAttachments({ uploaderId, questionId = null, answerId = null, attachments, createdAt }) {
+  const insertFile = db.prepare(`INSERT INTO files
+    (uploader_id, question_id, answer_id, original_name, mime_type, size_bytes, sha256, display_order, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const insertBlob = db.prepare('INSERT INTO file_blobs (file_id, content) VALUES (?, ?)');
+  const created = [];
+  for (const attachment of attachments) {
+    const result = insertFile.run(
+      uploaderId, questionId, answerId, attachment.originalName, attachment.mimeType,
+      attachment.sizeBytes, attachment.sha256, attachment.displayOrder, createdAt,
+    );
+    const id = Number(result.lastInsertRowid);
+    insertBlob.run(id, attachment.content);
+    created.push({ id, ...attachment });
+  }
+  return created;
+}
+
 export const store = {
   findUserByCredentials(loginId, password) {
     return db.prepare('SELECT id, role, nickname FROM users WHERE login_id = ? AND password = ?').get(loginId, password);
@@ -35,10 +53,14 @@ export const store = {
     const result = db.prepare('INSERT INTO notices (title, content, author_id, created_at) VALUES (?, ?, ?, ?)').run(title, content, authorId, createdAt);
     return { id: Number(result.lastInsertRowid), title, content, authorId, createdAt };
   },
-  createQuestion(studentId, content) {
-    const time = now();
-    const result = db.prepare("INSERT INTO questions (student_id, original_content, final_content, status, created_at, updated_at) VALUES (?, ?, ?, 'PROCESSING', ?, ?)").run(studentId, content, content, time, time);
-    return Number(result.lastInsertRowid);
+  createQuestion(studentId, content, attachments = []) {
+    return db.transaction(() => {
+      const time = now();
+      const result = db.prepare("INSERT INTO questions (student_id, original_content, final_content, status, created_at, updated_at) VALUES (?, ?, ?, 'PROCESSING', ?, ?)").run(studentId, content, content, time, time);
+      const questionId = Number(result.lastInsertRowid);
+      insertAttachments({ uploaderId: studentId, questionId, attachments, createdAt: time });
+      return questionId;
+    })();
   },
   getQuestion(id) { return db.prepare('SELECT * FROM questions WHERE id = ?').get(id); },
   getOwnedQuestion(id, studentId) { return db.prepare('SELECT * FROM questions WHERE id = ? AND student_id = ?').get(id, studentId); },
@@ -247,7 +269,8 @@ export const store = {
   listStudentQuestions(studentId, limit, offset) {
     return db.prepare(`SELECT q.id, COALESCE(q.final_content, q.original_content) AS content, q.status, q.route_type AS routeType,
       CASE WHEN q.subject_id IS NULL THEN NULL ELSE json_object('id', s.id, 'name', s.name) END AS subjectJson,
-      q.created_at AS createdAt, EXISTS(SELECT 1 FROM answers a WHERE a.question_id = q.id) AS hasAnswer
+      q.created_at AS createdAt, EXISTS(SELECT 1 FROM answers a WHERE a.question_id = q.id) AS hasAnswer,
+      (SELECT COUNT(*) FROM files f WHERE f.question_id = q.id) AS attachmentCount
       FROM questions q LEFT JOIN subjects s ON s.id = q.subject_id WHERE q.student_id = ? ORDER BY q.created_at DESC LIMIT ? OFFSET ?`).all(studentId, limit, offset);
   },
   countStudentQuestions(studentId) { return db.prepare('SELECT COUNT(*) AS count FROM questions WHERE student_id = ?').get(studentId).count; },
@@ -258,7 +281,12 @@ export const store = {
       WHERE q.id = ? AND q.student_id = ?`).get(questionId, studentId);
     if (!row) return null;
     const sources = row.answer_id ? db.prepare(`SELECT n.id, n.title FROM answer_notice_sources ans JOIN notices n ON n.id = ans.notice_id WHERE ans.answer_id = ? ORDER BY n.id`).all(row.answer_id) : [];
-    return { row, sources };
+    return {
+      row,
+      sources,
+      questionAttachments: this.listQuestionAttachments(questionId),
+      answerAttachments: row.answer_id ? this.listAnswerAttachments(row.answer_id) : [],
+    };
   },
   markStudentRead(answerId) { db.prepare('UPDATE answers SET student_read_at = ? WHERE id = ? AND student_read_at IS NULL').run(now(), answerId); },
   studentUnreadCount(studentId) {
@@ -273,7 +301,9 @@ export const store = {
     if (filters.unread !== undefined) where.push(filters.unread ? 'q.teacher_read_at IS NULL' : 'q.teacher_read_at IS NOT NULL');
     const base = `FROM questions q JOIN users u ON u.id = q.student_id LEFT JOIN subjects s ON s.id = q.subject_id WHERE ${where.join(' AND ')}`;
     const items = db.prepare(`SELECT q.id, q.final_content AS content, q.status, q.route_type AS routeType, q.teacher_read_at AS teacherReadAt, q.created_at AS createdAt,
-      q.student_id AS studentId, s.id AS subjectId, s.name AS subjectName ${base} ORDER BY q.created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+      q.student_id AS studentId, s.id AS subjectId, s.name AS subjectName,
+      (SELECT COUNT(*) FROM files f WHERE f.question_id = q.id) AS attachmentCount
+      ${base} ORDER BY q.created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
     const total = db.prepare(`SELECT COUNT(*) AS count ${base}`).get(...params).count;
     return { items, total };
   },
@@ -281,7 +311,7 @@ export const store = {
     return db.prepare(`SELECT q.*, s.name AS subject_name FROM questions q LEFT JOIN subjects s ON s.id = q.subject_id WHERE q.id = ? AND q.assigned_teacher_id = ?`).get(questionId, teacherId);
   },
   markTeacherRead(questionId) { db.prepare('UPDATE questions SET teacher_read_at = ? WHERE id = ? AND teacher_read_at IS NULL').run(now(), questionId); },
-  createTeacherAnswer(questionId, teacherId, content) {
+  createTeacherAnswer(questionId, teacherId, content, attachments = []) {
     return db.transaction(() => {
       const question = db.prepare('SELECT status FROM questions WHERE id = ? AND assigned_teacher_id = ?').get(questionId, teacherId);
       if (!question) return { kind: 'NOT_FOUND' };
@@ -294,9 +324,33 @@ export const store = {
         if (error.code?.startsWith('SQLITE_CONSTRAINT')) return { kind: 'DUPLICATE' };
         throw error;
       }
+      const answerId = Number(result.lastInsertRowid);
+      insertAttachments({ uploaderId: teacherId, answerId, attachments, createdAt: time });
       const changed = this.updateQuestion(questionId, { status: 'ANSWERED' }, 'ASSIGNED');
       if (!changed) throw new Error('답변 저장 중 질문 상태가 변경되었습니다.');
-      return { kind: 'CREATED', id: Number(result.lastInsertRowid), content, createdAt: time };
+      return { kind: 'CREATED', id: answerId, content, createdAt: time };
     })();
+  },
+  listQuestionAttachments(questionId) {
+    return db.prepare(`SELECT id, original_name AS originalName, mime_type AS mimeType, size_bytes AS sizeBytes
+      FROM files WHERE question_id = ? ORDER BY display_order`).all(questionId);
+  },
+  listAnswerAttachments(answerId) {
+    return db.prepare(`SELECT id, original_name AS originalName, mime_type AS mimeType, size_bytes AS sizeBytes
+      FROM files WHERE answer_id = ? ORDER BY display_order`).all(answerId);
+  },
+  getAuthorizedFile(fileId, userId) {
+    return db.prepare(`SELECT f.id, f.original_name AS originalName, f.mime_type AS mimeType,
+      f.size_bytes AS sizeBytes, fb.content
+      FROM files f
+      JOIN file_blobs fb ON fb.file_id = f.id
+      LEFT JOIN questions qf ON qf.id = f.question_id
+      LEFT JOIN answers a ON a.id = f.answer_id
+      LEFT JOIN questions qa ON qa.id = a.question_id
+      WHERE f.id = ? AND (
+        (f.question_id IS NOT NULL AND (qf.student_id = ? OR qf.assigned_teacher_id = ?))
+        OR
+        (f.answer_id IS NOT NULL AND (qa.student_id = ? OR a.teacher_id = ?))
+      )`).get(fileId, userId, userId, userId, userId);
   },
 };

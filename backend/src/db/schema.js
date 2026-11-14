@@ -81,6 +81,29 @@ CREATE TABLE IF NOT EXISTS answers (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uploader_id INTEGER NOT NULL REFERENCES users(id),
+  question_id INTEGER REFERENCES questions(id) ON DELETE RESTRICT,
+  answer_id INTEGER REFERENCES answers(id) ON DELETE RESTRICT,
+  original_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL CHECK (size_bytes > 0),
+  sha256 TEXT NOT NULL,
+  display_order INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  CHECK (
+    (question_id IS NOT NULL AND answer_id IS NULL)
+    OR
+    (question_id IS NULL AND answer_id IS NOT NULL)
+  )
+);
+
+CREATE TABLE IF NOT EXISTS file_blobs (
+  file_id INTEGER PRIMARY KEY REFERENCES files(id) ON DELETE RESTRICT,
+  content BLOB NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS answer_notice_sources (
   answer_id INTEGER NOT NULL REFERENCES answers(id),
   notice_id INTEGER NOT NULL REFERENCES notices(id),
@@ -102,4 +125,6 @@ CREATE INDEX IF NOT EXISTS idx_questions_student ON questions(student_id, create
 CREATE INDEX IF NOT EXISTS idx_questions_teacher ON questions(assigned_teacher_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_answers_unread ON answers(student_read_at, author_type);
 CREATE INDEX IF NOT EXISTS idx_improvement_suggestions ON question_improvement_suggestions(improvement_id, stage, display_order);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_files_question_order ON files(question_id, display_order) WHERE question_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_files_answer_order ON files(answer_id, display_order) WHERE answer_id IS NOT NULL;
 `;

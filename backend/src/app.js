@@ -9,6 +9,7 @@ import { noticesRouter } from './routes/notices.js';
 import { studentQuestionsRouter } from './routes/student-questions.js';
 import { subjectsRouter } from './routes/subjects.js';
 import { teacherQuestionsRouter } from './routes/teacher-questions.js';
+import { filesRouter } from './routes/files.js';
 import { usersRouter } from './routes/users.js';
 
 export const app = express();
@@ -43,5 +44,6 @@ app.use('/api/subjects', subjectsRouter);
 app.use('/api/notices', noticesRouter);
 app.use('/api/questions', studentQuestionsRouter);
 app.use('/api/teacher/questions', teacherQuestionsRouter);
+app.use('/api/files', filesRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);

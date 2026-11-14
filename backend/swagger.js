@@ -23,6 +23,7 @@ const document = {
         { name: 'Notices', description: '학교 공지사항 조회 및 등록' },
         { name: 'Student Questions', description: '학생 질문 제출, 보완 및 답변 확인' },
         { name: 'Teacher Questions', description: '교사에게 배정된 질문 확인 및 답변 등록' },
+        { name: 'Files', description: '질문 및 답변 첨부파일 다운로드' },
     ],
     definitions: {
         LoginRequest: {

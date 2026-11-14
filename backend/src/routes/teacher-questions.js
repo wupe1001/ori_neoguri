@@ -1,7 +1,9 @@
 import { Router } from 'express';
-import { badRequest, conflict, notFound } from '../errors.js';
+import { AppError, badRequest, conflict, notFound } from '../errors.js';
 import { requireRole } from '../middleware/auth.js';
+import { multipartUpload } from '../middleware/multipart-upload.js';
 import { store } from '../repositories/store.js';
+import { attachmentMetadata, prepareAttachments } from '../services/attachment.js';
 import { nonEmptyString, pageBody, pagination, positiveId } from './helpers.js';
 
 export const teacherQuestionsRouter = Router();
@@ -48,6 +50,7 @@ teacherQuestionsRouter.get('/', (req, res) => {
   const items = result.items.map((item) => ({
     id: item.id, content: item.content, status: item.status, routeType: item.routeType,
     teacherReadAt: item.teacherReadAt, createdAt: item.createdAt, studentId: item.studentId,
+    attachmentCount: item.attachmentCount,
     subject: item.subjectId ? { id: item.subjectId, name: item.subjectName } : null,
   }));
   res.json(pageBody(items, result.total, page, limit));
@@ -73,11 +76,12 @@ teacherQuestionsRouter.get('/:questionId', (req, res) => {
     finalContent: question.final_content, status: question.status, routeType: question.route_type,
     subject: question.subject_id ? { id: question.subject_id, name: question.subject_name } : null,
     teacherReadAt: question.teacher_read_at, createdAt: question.created_at, updatedAt: question.updated_at,
+    attachments: store.listQuestionAttachments(question.id).map(attachmentMetadata),
     improvement: store.getImprovement(question.id),
   });
 });
 
-teacherQuestionsRouter.post('/:questionId/answer', (req, res) => {
+teacherQuestionsRouter.post('/:questionId/answer', multipartUpload, (req, res) => {
   /* #swagger.tags = ['Teacher Questions']
      #swagger.summary = '교사 답변 등록'
      #swagger.description = 'ASSIGNED 상태로 현재 교사에게 배정된 질문에 답변을 한 번 등록하고 질문 상태를 ANSWERED로 변경합니다.'
@@ -85,14 +89,20 @@ teacherQuestionsRouter.post('/:questionId/answer', (req, res) => {
      #swagger.responses[409] = { description: '이미 답변했거나 답변할 수 있는 질문 상태가 아닙니다.' }
   */
   /* #swagger.parameters['questionId'] = { in: 'path', required: true, type: 'integer', minimum: 1 } */
-  /* #swagger.parameters['body'] = {
-       in: 'body',
-       required: true,
-       schema: { $ref: '#/definitions/AnswerRequest' }
-  } */
+  /* #swagger.consumes = ['multipart/form-data']
+     #swagger.parameters['content'] = { in: 'formData', required: true, type: 'string' }
+     #swagger.parameters['files'] = { in: 'formData', required: false, type: 'array', items: { type: 'file' }, collectionFormat: 'multi' }
+  */
   const questionId = positiveId(req.params.questionId, 'questionId');
   const content = nonEmptyString(req.body?.content, 'content', 5000);
-  const result = store.createTeacherAnswer(questionId, req.session.userId, content);
+  const attachments = prepareAttachments(req.files);
+  let result;
+  try {
+    result = store.createTeacherAnswer(questionId, req.session.userId, content, attachments);
+  } catch (error) {
+    if (!attachments.length) throw error;
+    throw new AppError(500, 'ATTACHMENT_STORAGE_FAILED', '첨부파일을 저장하지 못했습니다.');
+  }
   if (result.kind === 'NOT_FOUND') throw notFound('배정된 질문을 찾을 수 없습니다.');
   if (result.kind === 'DUPLICATE') throw conflict('ANSWER_ALREADY_EXISTS', '이 질문에는 이미 답변이 등록되었습니다.');
   if (result.kind === 'INVALID_STATE') throw conflict('QUESTION_INVALID_STATE', 'ASSIGNED 상태의 질문에만 답변할 수 있습니다.', { currentStatus: result.status });
