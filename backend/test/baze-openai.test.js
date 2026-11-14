@@ -9,6 +9,7 @@ process.env.CRISIS_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.NOTICE_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SUFFICIENCY_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SUBJECT_CONFIDENCE_THRESHOLD ||= '0.8';
+process.env.UNIT_CONFIDENCE_THRESHOLD ||= '0.8';
 
 const { BazeGenerationModel, finalQuestionSuggestionSchema, parseGenerationResponse } = await import('../src/model-clients/baze-openai.js');
 const { ModelError } = await import('../src/errors.js');

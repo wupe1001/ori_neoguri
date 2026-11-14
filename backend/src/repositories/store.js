@@ -38,6 +38,12 @@ export const store = {
   getSubject(id) {
     return db.prepare('SELECT id, name, teacher_id AS teacherId FROM subjects WHERE id = ?').get(id);
   },
+  listSubjectUnits(subjectId) {
+    return db.prepare('SELECT id, subject_id AS subjectId, name FROM subject_units WHERE subject_id = ? ORDER BY id').all(subjectId);
+  },
+  getUnit(id) {
+    return db.prepare('SELECT id, subject_id AS subjectId, name FROM subject_units WHERE id = ?').get(id);
+  },
   listAllNotices() {
     return db.prepare('SELECT id, title, content, author_id AS authorId, created_at AS createdAt FROM notices ORDER BY created_at DESC').all();
   },
@@ -75,10 +81,18 @@ export const store = {
   assignHomeroom(question) {
     const teacher = db.prepare("SELECT homeroom_teacher_id AS id FROM users WHERE id = ? AND role = 'STUDENT'").get(question.student_id);
     if (!teacher?.id) throw new Error('학생의 담임교사 연결이 없습니다.');
-    this.updateQuestion(question.id, { status: 'ASSIGNED', route_type: 'HOMEROOM', subject_id: null, assigned_teacher_id: teacher.id, failed_stage: null, retry_status: null });
+    this.updateQuestion(question.id, { status: 'ASSIGNED', route_type: 'HOMEROOM', subject_id: null, unit_id: null, assigned_teacher_id: teacher.id, failed_stage: null, retry_status: null });
   },
-  assignSubject(questionId, subject) {
-    this.updateQuestion(questionId, { status: 'ASSIGNED', route_type: 'SUBJECT', subject_id: subject.id, assigned_teacher_id: subject.teacherId, failed_stage: null, retry_status: null });
+  assignSubject(questionId, subject, unit = null, expectedStatus = 'PROCESSING') {
+    return db.transaction(() => {
+      if (unit && !db.prepare('SELECT 1 FROM subject_units WHERE id = ? AND subject_id = ?').get(unit.id, subject.id)) {
+        throw new Error('단원 태그가 선택된 과목에 속하지 않습니다.');
+      }
+      return this.updateQuestion(questionId, {
+        status: 'ASSIGNED', route_type: 'SUBJECT', subject_id: subject.id, unit_id: unit?.id ?? null,
+        assigned_teacher_id: subject.teacherId, failed_stage: null, retry_status: null,
+      }, expectedStatus);
+    })();
   },
   logDecision(questionId, stage, result) {
     db.prepare('INSERT INTO model_decision_logs (question_id, stage, provider, model, model_version, result_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
@@ -222,16 +236,13 @@ export const store = {
         .run(content, time, questionId, questionId).changes;
       if (!saved) return false;
       return Boolean(this.updateQuestion(questionId, {
-        status: 'PROCESSING', final_content: content, route_type: null, subject_id: null,
+        status: 'PROCESSING', final_content: content, route_type: null, subject_id: null, unit_id: null,
         assigned_teacher_id: null, teacher_read_at: null, failed_stage: null, retry_status: null,
       }, 'AWAITING_FINAL_QUESTION'));
     })();
   },
-  selectSubject(questionId, subject) {
-    return this.updateQuestion(questionId, {
-      status: 'ASSIGNED', route_type: 'SUBJECT', subject_id: subject.id,
-      assigned_teacher_id: subject.teacherId, failed_stage: null, retry_status: null,
-    }, 'NEEDS_SUBJECT_SELECTION');
+  selectSubject(questionId, subject, unit = null) {
+    return this.assignSubject(questionId, subject, unit, 'NEEDS_SUBJECT_SELECTION');
   },
   getImprovementRecord(questionId) {
     return db.prepare(`SELECT id, question_id AS questionId, stage1_prompt AS stage1Prompt,
@@ -269,15 +280,17 @@ export const store = {
   listStudentQuestions(studentId, limit, offset) {
     return db.prepare(`SELECT q.id, COALESCE(q.final_content, q.original_content) AS content, q.status, q.route_type AS routeType,
       CASE WHEN q.subject_id IS NULL THEN NULL ELSE json_object('id', s.id, 'name', s.name) END AS subjectJson,
+      CASE WHEN q.unit_id IS NULL THEN NULL ELSE json_object('id', su.id, 'name', su.name) END AS unitJson,
       q.created_at AS createdAt, EXISTS(SELECT 1 FROM answers a WHERE a.question_id = q.id) AS hasAnswer,
       (SELECT COUNT(*) FROM files f WHERE f.question_id = q.id) AS attachmentCount
-      FROM questions q LEFT JOIN subjects s ON s.id = q.subject_id WHERE q.student_id = ? ORDER BY q.created_at DESC LIMIT ? OFFSET ?`).all(studentId, limit, offset);
+      FROM questions q LEFT JOIN subjects s ON s.id = q.subject_id LEFT JOIN subject_units su ON su.id = q.unit_id
+      WHERE q.student_id = ? ORDER BY q.created_at DESC LIMIT ? OFFSET ?`).all(studentId, limit, offset);
   },
   countStudentQuestions(studentId) { return db.prepare('SELECT COUNT(*) AS count FROM questions WHERE student_id = ?').get(studentId).count; },
   getStudentQuestionDetail(questionId, studentId) {
-    const row = db.prepare(`SELECT q.*, s.name AS subject_name, a.id AS answer_id, a.author_type, a.teacher_id AS answer_teacher_id,
+    const row = db.prepare(`SELECT q.*, s.name AS subject_name, su.name AS unit_name, a.id AS answer_id, a.author_type, a.teacher_id AS answer_teacher_id,
       a.content AS answer_content, a.student_read_at, a.created_at AS answer_created_at
-      FROM questions q LEFT JOIN subjects s ON s.id = q.subject_id LEFT JOIN answers a ON a.question_id = q.id
+      FROM questions q LEFT JOIN subjects s ON s.id = q.subject_id LEFT JOIN subject_units su ON su.id = q.unit_id LEFT JOIN answers a ON a.question_id = q.id
       WHERE q.id = ? AND q.student_id = ?`).get(questionId, studentId);
     if (!row) return null;
     const sources = row.answer_id ? db.prepare(`SELECT n.id, n.title FROM answer_notice_sources ans JOIN notices n ON n.id = ans.notice_id WHERE ans.answer_id = ? ORDER BY n.id`).all(row.answer_id) : [];
@@ -298,17 +311,21 @@ export const store = {
     const params = [teacherId];
     if (filters.status) { where.push('q.status = ?'); params.push(filters.status); }
     if (filters.routeType) { where.push('q.route_type = ?'); params.push(filters.routeType); }
+    if (filters.unitId) { where.push('q.unit_id = ?'); params.push(filters.unitId); }
     if (filters.unread !== undefined) where.push(filters.unread ? 'q.teacher_read_at IS NULL' : 'q.teacher_read_at IS NOT NULL');
-    const base = `FROM questions q JOIN users u ON u.id = q.student_id LEFT JOIN subjects s ON s.id = q.subject_id WHERE ${where.join(' AND ')}`;
+    const base = `FROM questions q JOIN users u ON u.id = q.student_id LEFT JOIN subjects s ON s.id = q.subject_id LEFT JOIN subject_units su ON su.id = q.unit_id WHERE ${where.join(' AND ')}`;
     const items = db.prepare(`SELECT q.id, q.final_content AS content, q.status, q.route_type AS routeType, q.teacher_read_at AS teacherReadAt, q.created_at AS createdAt,
       q.student_id AS studentId, s.id AS subjectId, s.name AS subjectName,
+      su.id AS unitId, su.name AS unitName,
       (SELECT COUNT(*) FROM files f WHERE f.question_id = q.id) AS attachmentCount
       ${base} ORDER BY q.created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
     const total = db.prepare(`SELECT COUNT(*) AS count ${base}`).get(...params).count;
     return { items, total };
   },
   getTeacherQuestion(questionId, teacherId) {
-    return db.prepare(`SELECT q.*, s.name AS subject_name FROM questions q LEFT JOIN subjects s ON s.id = q.subject_id WHERE q.id = ? AND q.assigned_teacher_id = ?`).get(questionId, teacherId);
+    return db.prepare(`SELECT q.*, s.name AS subject_name, su.name AS unit_name FROM questions q
+      LEFT JOIN subjects s ON s.id = q.subject_id LEFT JOIN subject_units su ON su.id = q.unit_id
+      WHERE q.id = ? AND q.assigned_teacher_id = ?`).get(questionId, teacherId);
   },
   markTeacherRead(questionId) { db.prepare('UPDATE questions SET teacher_read_at = ? WHERE id = ? AND teacher_read_at IS NULL').run(now(), questionId); },
   createTeacherAnswer(questionId, teacherId, content, attachments = []) {

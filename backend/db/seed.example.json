@@ -1,13 +1,35 @@
 {
   "teachers": [
     { "loginId": "teacher01", "password": "replace-me", "nickname": "김선생" },
-    { "loginId": "teacher02", "password": "replace-me", "nickname": "이선생" }
+    { "loginId": "teacher02", "password": "replace-me", "nickname": "이선생" },
+    { "loginId": "teacher03", "password": "replace-me", "nickname": "teacher03" }
   ],
   "students": [
     { "loginId": "student01", "password": "replace-me", "nickname": "홍길동", "homeroomTeacherLoginId": "teacher01" }
   ],
   "subjects": [
-    { "name": "국어", "teacherLoginId": "teacher01" },
-    { "name": "수학", "teacherLoginId": "teacher02" }
+    {
+      "name": "수학",
+      "teacherLoginId": "teacher02",
+      "units": [
+        "공통수학1 - 다항식",
+        "공통수학1 - 방정식과 부등식",
+        "공통수학1 - 경우의 수",
+        "공통수학1 - 행렬",
+        "공통수학2 - 도형의 방정식",
+        "공통수학2 - 집합과 명제",
+        "공통수학2 - 함수와 그래프"
+      ]
+    },
+    {
+      "name": "국어",
+      "teacherLoginId": "teacher01",
+      "units": ["독서", "문학", "화법과 작문", "언어와 매체"]
+    },
+    {
+      "name": "영어",
+      "teacherLoginId": "teacher03",
+      "units": ["독해", "문법"]
+    }
   ]
 }

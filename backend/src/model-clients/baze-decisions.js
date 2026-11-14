@@ -138,4 +138,33 @@ export class BazeDecisionModel {
     if (!subjects.some((subject) => subject.id === subjectId)) throw invalidResponse('과목 분류 결과가 현재 DB 후보와 일치하지 않습니다.');
     return { subjectId, confidence: answer.confidence, probabilities: answer.probabilities, provider: 'BAZE', model: config.decisionModel, modelVersion: response.model_version || response.model || null };
   }
+
+  async classifyUnit(question, subject, units) {
+    if (!units.length) throw invalidResponse('분류할 단원이 없습니다.');
+    if (units.some((unit) => unit.subjectId !== subject.id)) throw invalidResponse('단원 후보가 선택된 과목과 일치하지 않습니다.');
+    if (units.length === 1) {
+      return {
+        unitId: units[0].id,
+        confidence: 1,
+        probabilities: { [`UNIT_${units[0].id}`]: 1 },
+        provider: 'APPLICATION', model: 'single-unit', modelVersion: null,
+      };
+    }
+    const criteria = Object.fromEntries(units.map((unit) => [`UNIT_${unit.id}`, unit.name]));
+    const response = await this.request({
+      question,
+      subject: { id: subject.id, name: subject.name },
+      units: units.map(({ id, name }) => ({ id, name })),
+    }, {
+      unit: { type: 'choice', instructions: '이 학생 질문이 속하는 단원을 정확히 하나 선택하세요.', criteria },
+    });
+    const answer = response.answers.unit;
+    if (answer.type !== 'choice') throw invalidResponse('단원 분류 응답 유형이 choice가 아닙니다.');
+    const allowed = new Set(Object.keys(criteria));
+    if (!allowed.has(answer.choice) || Object.keys(answer.probabilities).some((key) => !allowed.has(key))) throw invalidResponse('단원 분류 결과에 요청하지 않은 선택지가 있습니다.');
+    const match = /^UNIT_(\d+)$/.exec(answer.choice);
+    const unitId = match ? Number(match[1]) : NaN;
+    if (!units.some((unit) => unit.id === unitId)) throw invalidResponse('단원 분류 결과가 현재 DB 후보와 일치하지 않습니다.');
+    return { unitId, confidence: answer.confidence, probabilities: answer.probabilities, provider: 'BAZE', model: config.decisionModel, modelVersion: response.model_version || response.model || null };
+  }
 }

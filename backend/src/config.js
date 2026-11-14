@@ -43,5 +43,6 @@ export const config = Object.freeze({
     notice: numberSetting('NOTICE_CONFIDENCE_THRESHOLD', { min: 0, max: 1 }),
     sufficiency: numberSetting('SUFFICIENCY_CONFIDENCE_THRESHOLD', { min: 0, max: 1 }),
     subject: numberSetting('SUBJECT_CONFIDENCE_THRESHOLD', { min: 0, max: 1 }),
+    unit: numberSetting('UNIT_CONFIDENCE_THRESHOLD', { min: 0, max: 1 }),
   }),
 });

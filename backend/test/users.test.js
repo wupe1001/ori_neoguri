@@ -15,6 +15,7 @@ process.env.CRISIS_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.NOTICE_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SUFFICIENCY_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SUBJECT_CONFIDENCE_THRESHOLD ||= '0.8';
+process.env.UNIT_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SQLITE_PATH = path.join(testDirectory, 'test.sqlite');
 
 const legacyDb = new Database(process.env.SQLITE_PATH);

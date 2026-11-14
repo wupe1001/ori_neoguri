@@ -15,9 +15,10 @@ process.env.CRISIS_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.NOTICE_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SUFFICIENCY_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SUBJECT_CONFIDENCE_THRESHOLD ||= '0.8';
+process.env.UNIT_CONFIDENCE_THRESHOLD ||= '0.8';
 process.env.SQLITE_PATH = path.join(testDirectory, 'test.sqlite');
 
-const { db, migrateLegacyQuestionImprovement, migrateFinalSuggestionStatus, migrateFinalSuggestionColumn } = await import('../src/db/database.js');
+const { db, migrateLegacyQuestionImprovement, migrateFinalSuggestionStatus, migrateFinalSuggestionColumn, migrateQuestionUnitColumn } = await import('../src/db/database.js');
 const { store } = await import('../src/repositories/store.js');
 const { QuestionPipeline } = await import('../src/services/question-pipeline.js');
 const { ModelError } = await import('../src/errors.js');
@@ -104,6 +105,33 @@ test('기존 질문 개선 스키마에 최종 추천 생성 상태를 추가한
   previous.close();
 });
 
+test('기존 질문에는 nullable unit_id를 추가하고 값은 채우지 않는다', () => {
+  const previous = new Database(path.join(testDirectory, 'previous-units.sqlite'));
+  previous.pragma('foreign_keys = ON');
+  previous.exec(`
+    CREATE TABLE users (id INTEGER PRIMARY KEY);
+    CREATE TABLE subjects (id INTEGER PRIMARY KEY);
+    CREATE TABLE subject_units (
+      id INTEGER PRIMARY KEY, subject_id INTEGER NOT NULL REFERENCES subjects(id), name TEXT NOT NULL
+    );
+    CREATE TABLE questions (
+      id INTEGER PRIMARY KEY, student_id INTEGER NOT NULL REFERENCES users(id), original_content TEXT NOT NULL,
+      final_content TEXT, status TEXT NOT NULL, route_type TEXT, subject_id INTEGER REFERENCES subjects(id),
+      assigned_teacher_id INTEGER REFERENCES users(id), teacher_read_at TEXT, failed_stage TEXT, retry_status TEXT,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    INSERT INTO users (id) VALUES (1);
+    INSERT INTO questions (id, student_id, original_content, status, created_at, updated_at)
+      VALUES (1, 1, '기존 질문', 'ASSIGNED', '2026-01-01', '2026-01-01');
+  `);
+
+  migrateQuestionUnitColumn(previous);
+
+  assert.ok(previous.prepare('PRAGMA table_info(questions)').all().some(({ name }) => name === 'unit_id'));
+  assert.equal(previous.prepare('SELECT unit_id FROM questions WHERE id = 1').get().unit_id, null);
+  previous.close();
+});
+
 test('네 단계 질문 개선 이력을 저장하고 완료 후 충분성 판단을 생략한다', async () => {
   const createdAt = new Date().toISOString();
   const teacherId = Number(db.prepare(
@@ -114,6 +142,8 @@ test('네 단계 질문 개선 이력을 저장하고 완료 후 충분성 판�
   ).run(teacherId, createdAt).lastInsertRowid);
   const subjectId = Number(db.prepare('INSERT INTO subjects (name, teacher_id) VALUES (?, ?)')
     .run('영어', teacherId).lastInsertRowid);
+  const unitId = Number(db.prepare('INSERT INTO subject_units (subject_id, name) VALUES (?, ?)')
+    .run(subjectId, '문법').lastInsertRowid);
 
   const calls = { sufficiency: 0 };
   const decision = {
@@ -124,6 +154,7 @@ test('네 단계 질문 개선 이력을 저장하고 완료 후 충분성 판�
       return { probability: 0.1, confidence: 0.9, provider: 'TEST', model: 'test' };
     },
     classifySubject: async () => ({ subjectId, confidence: 1, provider: 'TEST', model: 'test' }),
+    classifyUnit: async () => ({ unitId, confidence: 1, provider: 'TEST', model: 'test' }),
   };
   const generation = {
     generateImprovementStage1: async () => ({
@@ -172,6 +203,7 @@ test('네 단계 질문 개선 이력을 저장하고 완료 후 충분성 판�
 test('중간 단계 추천을 한 번만 생성하고 실패 시 retry로 재개한다', async () => {
   const studentId = db.prepare("SELECT id FROM users WHERE login_id = 'student'").get().id;
   const subjectId = db.prepare("SELECT id FROM subjects WHERE name = '영어'").get().id;
+  const unitId = db.prepare("SELECT id FROM subject_units WHERE subject_id = ? AND name = '문법'").get(subjectId).id;
   let suggestionCalls = 0;
   let failSuggestion = false;
   const decision = {
@@ -179,6 +211,7 @@ test('중간 단계 추천을 한 번만 생성하고 실패 시 retry로 재개
     matchNotices: async () => ({ answerable: false, noticeIds: [], provider: 'TEST', model: 'test' }),
     checkSufficiency: async () => ({ probability: 0.1, confidence: 0.9, provider: 'TEST', model: 'test' }),
     classifySubject: async () => ({ subjectId, confidence: 1, provider: 'TEST', model: 'test' }),
+    classifyUnit: async () => ({ unitId, confidence: 1, provider: 'TEST', model: 'test' }),
   };
   const generation = {
     generateImprovementStage1: async () => ({

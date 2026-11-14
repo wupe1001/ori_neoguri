@@ -29,7 +29,7 @@ studentQuestionsRouter.get('/unread-count', (req, res) => {
 studentQuestionsRouter.post('/', multipartUpload, async (req, res) => {
   /* #swagger.tags = ['Student Questions']
      #swagger.summary = '질문 제출'
-     #swagger.description = '학생 질문을 저장한 뒤 위기 감지, 공지 답변, 충분성 판단과 과목 분류 파이프라인을 동기적으로 실행합니다.'
+     #swagger.description = '학생 질문을 저장한 뒤 위기 감지, 공지 답변, 충분성 판단, 과목 분류와 비차단 단원 태그 분류 파이프라인을 동기적으로 실행합니다.'
      #swagger.responses[201] = { description: '질문 처리 결과와 현재 상태를 반환합니다.' }
      #swagger.responses[422] = { description: '질문이 모델 입력 한도를 초과했습니다.' }
      #swagger.responses[503] = { description: '외부 모델 처리에 실패했습니다.' }
@@ -68,6 +68,7 @@ studentQuestionsRouter.get('/', (req, res) => {
     status: item.status,
     routeType: item.routeType,
     subject: item.subjectJson ? JSON.parse(item.subjectJson) : null,
+    unit: item.unitJson ? JSON.parse(item.unitJson) : null,
     createdAt: item.createdAt,
     hasAnswer: Boolean(item.hasAnswer),
     attachmentCount: item.attachmentCount,
@@ -155,10 +156,10 @@ studentQuestionsRouter.post('/:questionId/improvement/final', async (req, res) =
   res.json(await questionPipeline.run(questionId));
 });
 
-studentQuestionsRouter.post('/:questionId/subject', (req, res) => {
+studentQuestionsRouter.post('/:questionId/subject', async (req, res) => {
   /* #swagger.tags = ['Student Questions']
      #swagger.summary = '질문 과목 직접 선택'
-     #swagger.description = 'NEEDS_SUBJECT_SELECTION 상태인 본인 질문의 과목을 선택하여 해당 과목 담당 교사에게 배정합니다.'
+     #swagger.description = 'NEEDS_SUBJECT_SELECTION 상태인 본인 질문의 과목을 선택하고 해당 과목 안에서 단원 태그를 분류한 뒤 담당 교사에게 배정합니다. 단원 분류 실패는 배정을 막지 않습니다.'
      #swagger.responses[200] = { description: '과목과 담당 교사 배정 결과를 반환합니다.' }
      #swagger.responses[409] = { description: '과목을 선택할 수 있는 질문 상태가 아닙니다.' }
   */
@@ -173,8 +174,9 @@ studentQuestionsRouter.post('/:questionId/subject', (req, res) => {
   if (question.status !== 'NEEDS_SUBJECT_SELECTION') throw conflict('QUESTION_INVALID_STATE', '현재 질문 상태에서는 과목을 선택할 수 없습니다.', { currentStatus: question.status });
   const subject = store.getSubject(positiveId(req.body?.subjectId, 'subjectId'));
   if (!subject) throw notFound('과목을 찾을 수 없습니다.');
-  if (!store.selectSubject(questionId, subject)) throw conflict('QUESTION_INVALID_STATE', '질문 상태가 이미 변경되었습니다.');
-  res.json({ questionId, status: 'ASSIGNED', routeType: 'SUBJECT', subject: { id: subject.id, name: subject.name } });
+  const result = await questionPipeline.assignSelectedSubject(questionId, subject);
+  if (!result) throw conflict('QUESTION_INVALID_STATE', '질문 상태가 이미 변경되었습니다.');
+  res.json(result);
 });
 
 studentQuestionsRouter.post('/:questionId/retry', async (req, res) => {
@@ -215,6 +217,7 @@ studentQuestionsRouter.get('/:questionId', (req, res) => {
     status: row.status,
     routeType: row.route_type,
     subject: row.subject_id ? { id: row.subject_id, name: row.subject_name } : null,
+    unit: row.unit_id ? { id: row.unit_id, name: row.unit_name } : null,
     failedStage: row.failed_stage,
     retryStatus: row.retry_status,
     createdAt: row.created_at,

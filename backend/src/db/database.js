@@ -104,6 +104,40 @@ export function migrateFinalSuggestionStatus(database = db) {
 migrateFinalSuggestionStatus();
 db.exec(schema);
 
+export function migrateQuestionUnitColumn(database = db) {
+  const columns = database.prepare('PRAGMA table_info(questions)').all();
+  if (!columns.some(({ name }) => name === 'unit_id')) {
+    database.exec('ALTER TABLE questions ADD COLUMN unit_id INTEGER REFERENCES subject_units(id)');
+  }
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_questions_unit ON questions(unit_id, created_at DESC);
+    CREATE TRIGGER IF NOT EXISTS validate_question_unit_insert
+    BEFORE INSERT ON questions
+    WHEN NEW.unit_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM subject_units su WHERE su.id = NEW.unit_id AND su.subject_id = NEW.subject_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'question unit must belong to subject');
+    END;
+    CREATE TRIGGER IF NOT EXISTS validate_question_unit_update
+    BEFORE UPDATE OF subject_id, unit_id ON questions
+    WHEN NEW.unit_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM subject_units su WHERE su.id = NEW.unit_id AND su.subject_id = NEW.subject_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'question unit must belong to subject');
+    END;
+    CREATE TRIGGER IF NOT EXISTS prevent_question_unit_change
+    BEFORE UPDATE OF unit_id ON questions
+    WHEN OLD.unit_id IS NOT NULL AND NEW.unit_id IS NOT OLD.unit_id
+    BEGIN
+      SELECT RAISE(ABORT, 'question unit is immutable');
+    END;
+  `);
+}
+
+migrateQuestionUnitColumn();
+
 export function migrateFinalSuggestionColumn(database = db) {
   const columns = database.prepare('PRAGMA table_info(question_improvements)').all();
   if (!columns.some(({ name }) => name === 'final_suggestion')) {
@@ -123,7 +157,21 @@ function migrateUserNickname() {
 
 migrateUserNickname();
 
-function validateSeed(seed) {
+function readSeed() {
+  try {
+    return JSON.parse(readFileSync(config.seedPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`시드 파일을 읽을 수 없습니다: ${config.seedPath} (${error.message})`);
+  }
+}
+
+function accountNickname(account) {
+  const nickname = typeof account.nickname === 'string' ? account.nickname.trim() : '';
+  const loginId = typeof account.loginId === 'string' ? account.loginId.trim() : '';
+  return nickname || loginId;
+}
+
+export function validateSeed(seed) {
   if (!seed || !Array.isArray(seed.teachers) || !seed.teachers.length || !Array.isArray(seed.students) || !seed.students.length || !Array.isArray(seed.subjects) || !seed.subjects.length) {
     throw new Error('시드에는 teachers, students, subjects의 비어 있지 않은 배열이 필요합니다.');
   }
@@ -131,7 +179,7 @@ function validateSeed(seed) {
   for (const account of [...seed.teachers, ...seed.students]) {
     const loginId = typeof account.loginId === 'string' ? account.loginId.trim() : '';
     const password = typeof account.password === 'string' ? account.password.trim() : '';
-    const nickname = typeof account.nickname === 'string' ? account.nickname.trim() : '';
+    const nickname = accountNickname(account);
     if (!loginId || !password || loginIds.has(loginId)) throw new Error('시드 계정의 loginId/password가 없거나 loginId가 중복됩니다.');
     if (!nickname || nickname.length > 100) throw new Error(`시드 계정 ${loginId}의 nickname은 1자 이상 100자 이하여야 합니다.`);
     loginIds.add(loginId);
@@ -146,29 +194,83 @@ function validateSeed(seed) {
     const name = typeof subject.name === 'string' ? subject.name.trim() : '';
     const teacherLoginId = typeof subject.teacherLoginId === 'string' ? subject.teacherLoginId.trim() : '';
     if (!name || subjectNames.has(name) || !teacherIds.has(teacherLoginId)) throw new Error(`과목 ${name || '(이름 없음)'}의 이름 또는 담당 교사가 유효하지 않습니다.`);
+    if (!Array.isArray(subject.units) || !subject.units.length) throw new Error(`과목 ${name}의 units는 비어 있지 않은 배열이어야 합니다.`);
+    const unitNames = new Set();
+    for (const unit of subject.units) {
+      const unitName = typeof unit === 'string' ? unit.trim() : '';
+      if (!unitName || unitNames.has(unitName)) throw new Error(`과목 ${name}의 단원 이름이 비어 있거나 중복됩니다.`);
+      unitNames.add(unitName);
+    }
     subjectNames.add(name);
+  }
+  const requiredSubjects = ['수학', '국어', '영어'];
+  if (subjectNames.size !== requiredSubjects.length || requiredSubjects.some((name) => !subjectNames.has(name))) {
+    throw new Error('과목은 수학, 국어, 영어로 정확히 구성해야 합니다.');
   }
 }
 
 export function seedDatabase() {
+  const seed = readSeed();
+  validateSeed(seed);
+
   if (db.prepare('SELECT COUNT(*) AS count FROM users').get().count === 0) {
-    let seed;
-    try {
-      seed = JSON.parse(readFileSync(config.seedPath, 'utf8'));
-    } catch (error) {
-      throw new Error(`시드 파일을 읽을 수 없습니다: ${config.seedPath} (${error.message})`);
-    }
-    validateSeed(seed);
     const run = db.transaction(() => {
       const now = new Date().toISOString();
       const insertUser = db.prepare('INSERT INTO users (login_id, password, nickname, role, homeroom_teacher_id, created_at) VALUES (?, ?, ?, ?, ?, ?)');
       const ids = new Map();
-      for (const teacher of seed.teachers) ids.set(teacher.loginId.trim(), Number(insertUser.run(teacher.loginId.trim(), teacher.password, teacher.nickname.trim(), 'TEACHER', null, now).lastInsertRowid));
-      for (const student of seed.students) insertUser.run(student.loginId.trim(), student.password, student.nickname.trim(), 'STUDENT', ids.get(student.homeroomTeacherLoginId.trim()), now);
+      for (const teacher of seed.teachers) ids.set(teacher.loginId.trim(), Number(insertUser.run(teacher.loginId.trim(), teacher.password, accountNickname(teacher), 'TEACHER', null, now).lastInsertRowid));
+      for (const student of seed.students) insertUser.run(student.loginId.trim(), student.password, accountNickname(student), 'STUDENT', ids.get(student.homeroomTeacherLoginId.trim()), now);
       const insertSubject = db.prepare('INSERT INTO subjects (name, teacher_id) VALUES (?, ?)');
-      for (const subject of seed.subjects) insertSubject.run(subject.name.trim(), ids.get(subject.teacherLoginId.trim()));
+      const insertUnit = db.prepare('INSERT INTO subject_units (subject_id, name) VALUES (?, ?)');
+      for (const subject of seed.subjects) {
+        const subjectId = Number(insertSubject.run(subject.name.trim(), ids.get(subject.teacherLoginId.trim())).lastInsertRowid);
+        for (const unit of subject.units) insertUnit.run(subjectId, unit.trim());
+      }
     });
     run();
+  } else {
+    const allowedSubjects = new Set(seed.subjects.map(({ name }) => name.trim()));
+    const extraSubject = db.prepare('SELECT name FROM subjects').all().find(({ name }) => !allowedSubjects.has(name));
+    if (extraSubject) throw new Error(`DB 과목 ${extraSubject.name}이 시드에 없습니다.`);
+    db.transaction(() => {
+      const now = new Date().toISOString();
+      const insertTeacher = db.prepare(`INSERT INTO users
+        (login_id, password, nickname, role, homeroom_teacher_id, created_at)
+        VALUES (?, ?, ?, 'TEACHER', NULL, ?)`);
+      for (const teacher of seed.teachers) {
+        const loginId = teacher.loginId.trim();
+        const existing = db.prepare('SELECT role FROM users WHERE login_id = ?').get(loginId);
+        if (!existing) insertTeacher.run(loginId, teacher.password, accountNickname(teacher), now);
+        else if (existing.role !== 'TEACHER') throw new Error(`시드 교사 ${loginId}가 TEACHER 계정이 아닙니다.`);
+      }
+
+      const insertSubject = db.prepare('INSERT INTO subjects (name, teacher_id) VALUES (?, ?)');
+      const insertUnit = db.prepare('INSERT INTO subject_units (subject_id, name) VALUES (?, ?)');
+      for (const subjectSeed of seed.subjects) {
+        const name = subjectSeed.name.trim();
+        const teacherLoginId = subjectSeed.teacherLoginId.trim();
+        const teacher = db.prepare("SELECT id FROM users WHERE login_id = ? AND role = 'TEACHER'").get(teacherLoginId);
+        let subject = db.prepare(`SELECT s.id, t.login_id AS teacherLoginId
+          FROM subjects s JOIN users t ON t.id = s.teacher_id WHERE s.name = ?`).get(name);
+        if (!subject) {
+          const subjectId = Number(insertSubject.run(name, teacher.id).lastInsertRowid);
+          subject = { id: subjectId, teacherLoginId };
+        }
+        if (subject.teacherLoginId !== teacherLoginId) throw new Error(`과목 ${name}의 담당 교사가 시드와 일치하지 않습니다.`);
+
+        const expectedUnits = subjectSeed.units.map((unit) => unit.trim());
+        const actualUnits = db.prepare('SELECT name FROM subject_units WHERE subject_id = ? ORDER BY id').all(subject.id).map(({ name: unitName }) => unitName);
+        if (!actualUnits.length) {
+          for (const unitName of expectedUnits) insertUnit.run(subject.id, unitName);
+        } else {
+          const expectedSorted = [...expectedUnits].sort();
+          const actualSorted = [...actualUnits].sort();
+          if (expectedSorted.length !== actualSorted.length || expectedSorted.some((unitName, index) => unitName !== actualSorted[index])) {
+            throw new Error(`과목 ${name}의 단원 목록이 시드와 일치하지 않습니다.`);
+          }
+        }
+      }
+    })();
   }
 
   const counts = db.prepare("SELECT SUM(role = 'STUDENT') AS students, SUM(role = 'TEACHER') AS teachers FROM users").get();
@@ -183,4 +285,12 @@ export function seedDatabase() {
   if (invalidNickname) throw new Error(`계정 ${invalidNickname.login_id}의 nickname은 1자 이상 100자 이하여야 합니다.`);
   const invalidSubject = db.prepare("SELECT s.name FROM subjects s LEFT JOIN users t ON t.id = s.teacher_id WHERE t.id IS NULL OR t.role <> 'TEACHER' LIMIT 1").get();
   if (invalidSubject) throw new Error(`과목 ${invalidSubject.name}의 담당 교사 연결이 유효하지 않습니다.`);
+  const actualSubjectNames = db.prepare('SELECT name FROM subjects').all().map(({ name }) => name).sort();
+  const expectedSubjectNames = seed.subjects.map(({ name }) => name.trim()).sort();
+  if (actualSubjectNames.length !== expectedSubjectNames.length || expectedSubjectNames.some((name, index) => name !== actualSubjectNames[index])) {
+    throw new Error('DB 과목 목록이 시드와 일치하지 않습니다.');
+  }
+  const invalidUnit = db.prepare(`SELECT su.name FROM subject_units su
+    LEFT JOIN subjects s ON s.id = su.subject_id WHERE s.id IS NULL LIMIT 1`).get();
+  if (invalidUnit) throw new Error(`단원 ${invalidUnit.name}의 과목 연결이 유효하지 않습니다.`);
 }

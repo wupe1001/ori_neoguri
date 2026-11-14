@@ -19,7 +19,7 @@ const document = {
         { name: 'Service', description: '서비스 상태 확인' },
         { name: 'Auth', description: '세션 로그인 및 로그아웃' },
         { name: 'Users', description: 'ID 기반 사용자 계정 정보 조회' },
-        { name: 'Subjects', description: '질문을 배정할 과목 조회' },
+        { name: 'Subjects', description: '질문을 배정할 과목과 과목별 단원 태그 조회' },
         { name: 'Notices', description: '학교 공지사항 조회 및 등록' },
         { name: 'Student Questions', description: '학생 질문 제출, 보완 및 답변 확인' },
         { name: 'Teacher Questions', description: '교사에게 배정된 질문 확인 및 답변 등록' },

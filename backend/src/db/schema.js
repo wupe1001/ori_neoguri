@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS subjects (
   teacher_id INTEGER NOT NULL REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS subject_units (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subject_id INTEGER NOT NULL REFERENCES subjects(id),
+  name TEXT NOT NULL,
+  UNIQUE (subject_id, name)
+);
+
 CREATE TABLE IF NOT EXISTS notices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
@@ -33,6 +40,7 @@ CREATE TABLE IF NOT EXISTS questions (
   status TEXT NOT NULL CHECK (status IN ('PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','GENERATING_FINAL_QUESTION_SUGGESTION','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED')),
   route_type TEXT CHECK (route_type IN ('SUBJECT','HOMEROOM')),
   subject_id INTEGER REFERENCES subjects(id),
+  unit_id INTEGER REFERENCES subject_units(id),
   assigned_teacher_id INTEGER REFERENCES users(id),
   teacher_read_at TEXT,
   failed_stage TEXT,
@@ -123,6 +131,7 @@ CREATE TABLE IF NOT EXISTS model_decision_logs (
 
 CREATE INDEX IF NOT EXISTS idx_questions_student ON questions(student_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_questions_teacher ON questions(assigned_teacher_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_subject_units_subject ON subject_units(subject_id, id);
 CREATE INDEX IF NOT EXISTS idx_answers_unread ON answers(student_read_at, author_type);
 CREATE INDEX IF NOT EXISTS idx_improvement_suggestions ON question_improvement_suggestions(improvement_id, stage, display_order);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_files_question_order ON files(question_id, display_order) WHERE question_id IS NOT NULL;

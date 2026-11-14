@@ -23,7 +23,7 @@ teacherQuestionsRouter.get('/unread-count', (req, res) => {
 teacherQuestionsRouter.get('/', (req, res) => {
   /* #swagger.tags = ['Teacher Questions']
      #swagger.summary = '배정 질문 목록 조회'
-     #swagger.description = '현재 교사에게 배정된 질문을 상태, 전달 유형과 읽음 여부로 필터링하여 페이지 조회합니다. 목록 조회는 읽음 상태를 변경하지 않습니다.'
+     #swagger.description = '현재 교사에게 배정된 질문을 상태, 전달 유형, 단원 태그와 읽음 여부로 필터링하여 페이지 조회합니다. 목록 조회는 읽음 상태를 변경하지 않습니다.'
      #swagger.responses[200] = { description: '배정 질문 목록과 페이지 정보를 반환합니다.' }
   */
   /* #swagger.parameters['page'] = { in: 'query', type: 'integer', minimum: 1, default: 1 }
@@ -31,6 +31,7 @@ teacherQuestionsRouter.get('/', (req, res) => {
      #swagger.parameters['status'] = { in: 'query', type: 'string', enum: ['PROCESSING','GENERATING_IMPROVEMENT_STAGE_1','AWAITING_IMPROVEMENT_STAGE_1','GENERATING_IMPROVEMENT_STAGE_2','AWAITING_IMPROVEMENT_STAGE_2','GENERATING_IMPROVEMENT_STAGE_3','GENERATING_FINAL_QUESTION_SUGGESTION','AWAITING_FINAL_QUESTION','NEEDS_SUBJECT_SELECTION','ASSIGNED','ANSWERED','NOTICE_ANSWERED','PROCESSING_FAILED'] }
      #swagger.parameters['routeType'] = { in: 'query', type: 'string', enum: ['SUBJECT', 'HOMEROOM'] }
      #swagger.parameters['unread'] = { in: 'query', type: 'boolean' }
+     #swagger.parameters['unitId'] = { in: 'query', type: 'integer', minimum: 1 }
   */
   const { page, limit, offset } = pagination(req.query);
   const filters = {};
@@ -46,12 +47,14 @@ teacherQuestionsRouter.get('/', (req, res) => {
     if (!['true', 'false'].includes(req.query.unread)) throw badRequest('VALIDATION_ERROR', 'unread는 true 또는 false여야 합니다.');
     filters.unread = req.query.unread === 'true';
   }
+  if (req.query.unitId !== undefined) filters.unitId = positiveId(req.query.unitId, 'unitId');
   const result = store.listTeacherQuestions(req.session.userId, filters, limit, offset);
   const items = result.items.map((item) => ({
     id: item.id, content: item.content, status: item.status, routeType: item.routeType,
     teacherReadAt: item.teacherReadAt, createdAt: item.createdAt, studentId: item.studentId,
     attachmentCount: item.attachmentCount,
     subject: item.subjectId ? { id: item.subjectId, name: item.subjectName } : null,
+    unit: item.unitId ? { id: item.unitId, name: item.unitName } : null,
   }));
   res.json(pageBody(items, result.total, page, limit));
 });
@@ -75,6 +78,7 @@ teacherQuestionsRouter.get('/:questionId', (req, res) => {
     id: question.id, studentId: question.student_id, originalContent: question.original_content,
     finalContent: question.final_content, status: question.status, routeType: question.route_type,
     subject: question.subject_id ? { id: question.subject_id, name: question.subject_name } : null,
+    unit: question.unit_id ? { id: question.unit_id, name: question.unit_name } : null,
     teacherReadAt: question.teacher_read_at, createdAt: question.created_at, updatedAt: question.updated_at,
     attachments: store.listQuestionAttachments(question.id).map(attachmentMetadata),
     improvement: store.getImprovement(question.id),

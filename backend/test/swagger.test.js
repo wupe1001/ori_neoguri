@@ -48,13 +48,24 @@ test('Swagger 문서에 목록 쿼리와 양의 정수 경로 인자가 포함�
   }
 
   for (const [path, operations] of Object.entries(swagger.paths)) {
-    if (!path.includes('{questionId}') && !path.includes('{noticeId}') && !path.includes('{fileId}')) continue;
+    if (!path.includes('{questionId}') && !path.includes('{noticeId}') && !path.includes('{fileId}') && !path.includes('{subjectId}')) continue;
     for (const operation of Object.values(operations)) {
       const pathParameter = operation.parameters.find(({ in: location }) => location === 'path');
       assert.equal(pathParameter.type, 'integer', path);
       assert.equal(pathParameter.minimum, 1, path);
     }
   }
+});
+
+test('Swagger 문서에 과목별 단원 조회와 교사 단원 필터가 포함된다', () => {
+  const units = swagger.paths['/api/subjects/{subjectId}/units']?.get;
+  assert.ok(units);
+  assert.equal(units.parameters.find(({ name }) => name === 'subjectId')?.minimum, 1);
+  assert.ok(units.responses['200']);
+  assert.ok(units.responses['404']);
+
+  const teacherList = swagger.paths['/api/teacher/questions/']?.get;
+  assert.equal(teacherList.parameters.find(({ name }) => name === 'unitId')?.minimum, 1);
 });
 
 test('Swagger 문서의 모든 엔드포인트에 역할 설명과 기능 태그가 포함된다', () => {

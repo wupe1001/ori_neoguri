@@ -8,6 +8,7 @@ import { IMPROVEMENT_STAGES, QuestionImprovementService } from './question-impro
 export const STAGES = Object.freeze({
   CRISIS: 'CRISIS_DETECTION', NOTICE: 'NOTICE_MATCHING', NOTICE_ANSWER: 'NOTICE_ANSWER_GENERATION',
   SUFFICIENCY: 'SUFFICIENCY_CHECK', SUBJECT: 'SUBJECT_CLASSIFICATION',
+  UNIT: 'UNIT_CLASSIFICATION',
   IMPROVEMENT_1: IMPROVEMENT_STAGES.STAGE_1,
   IMPROVEMENT_2: IMPROVEMENT_STAGES.STAGE_2,
   IMPROVEMENT_3: IMPROVEMENT_STAGES.STAGE_3,
@@ -46,7 +47,7 @@ export class QuestionPipeline {
         store.logDecision(questionId, STAGES.CRISIS, result);
         if (result.probability >= config.thresholds.crisis || result.confidence < config.thresholds.crisis) {
           store.assignHomeroom(question);
-          return { questionId, status: 'ASSIGNED', routeType: 'HOMEROOM', message: crisisMessage };
+          return { questionId, status: 'ASSIGNED', routeType: 'HOMEROOM', unit: null, message: crisisMessage };
         }
       }
 
@@ -90,12 +91,35 @@ export class QuestionPipeline {
         return { questionId, status: 'NEEDS_SUBJECT_SELECTION', subjects: subjects.map(({ id, name }) => ({ id, name })) };
       }
       const subject = subjects.find((item) => item.id === classification.subjectId);
-      store.assignSubject(questionId, subject);
-      return { questionId, status: 'ASSIGNED', routeType: 'SUBJECT', subject: { id: subject.id, name: subject.name } };
+      const unit = await this.classifyUnit(questionId, content, subject);
+      if (!store.assignSubject(questionId, subject, unit)) throw conflict('QUESTION_INVALID_STATE', '질문 상태가 이미 변경되었습니다.');
+      return { questionId, status: 'ASSIGNED', routeType: 'SUBJECT', subject: { id: subject.id, name: subject.name }, unit: unit ? { id: unit.id, name: unit.name } : null };
     } catch (error) {
       if (error instanceof ModelError) this.fail(questionId, currentStage, 'PROCESSING', error);
       throw error;
     }
+  }
+
+  async classifyUnit(questionId, content, subject) {
+    const units = store.listSubjectUnits(subject.id);
+    try {
+      const classification = await this.decision.classifyUnit(content, subject, units);
+      store.logDecision(questionId, STAGES.UNIT, classification);
+      if (classification.confidence < config.thresholds.unit) return null;
+      return units.find((item) => item.id === classification.unitId) || null;
+    } catch (error) {
+      if (error instanceof ModelError) return null;
+      throw error;
+    }
+  }
+
+  async assignSelectedSubject(questionId, subject) {
+    const question = store.getQuestion(questionId);
+    const content = question.final_content || question.original_content;
+    const unit = await this.classifyUnit(questionId, content, subject);
+    const changed = store.selectSubject(questionId, subject, unit);
+    if (!changed) return null;
+    return { questionId, status: 'ASSIGNED', routeType: 'SUBJECT', subject: { id: subject.id, name: subject.name }, unit: unit ? { id: unit.id, name: unit.name } : null };
   }
 
   async retry(questionId) {

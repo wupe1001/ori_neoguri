@@ -14,6 +14,7 @@ process.env.CRISIS_CONFIDENCE_THRESHOLD ||= '0.5';
 process.env.NOTICE_CONFIDENCE_THRESHOLD ||= '0.5';
 process.env.SUFFICIENCY_CONFIDENCE_THRESHOLD ||= '0.5';
 process.env.SUBJECT_CONFIDENCE_THRESHOLD ||= '0.5';
+process.env.UNIT_CONFIDENCE_THRESHOLD ||= '0.5';
 
 const { db } = await import('../src/db/database.js');
 const { store } = await import('../src/repositories/store.js');
